@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Hexo, NexT" />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="御风而行" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="这阵子发现思考少了，浪多了，实在不该。原本想分享下上周我解不动，最后请AE team大佬帮忙解决的一道难题。原理是两个库的函数名相同且同时加载到内存中，导致执行bin档链接错误的vtable，引发coredump问题，不过昨天还是没能理解这套异常的发生机制和复现方案，所以分享不了，等我看下书，学习下再来。　　今早起来时想起过往一些事，也就想到自己处事的三个基本原则，这三个原则支持我克服了诸多难">
+<meta property="og:type" content="article">
+<meta property="og:title" content="行事三原则">
+<meta property="og:url" content="https://donald-zhuang.github.io/2018/08/04/my-rules/index.html">
+<meta property="og:site_name" content="御风而行">
+<meta property="og:description" content="这阵子发现思考少了，浪多了，实在不该。原本想分享下上周我解不动，最后请AE team大佬帮忙解决的一道难题。原理是两个库的函数名相同且同时加载到内存中，导致执行bin档链接错误的vtable，引发coredump问题，不过昨天还是没能理解这套异常的发生机制和复现方案，所以分享不了，等我看下书，学习下再来。　　今早起来时想起过往一些事，也就想到自己处事的三个基本原则，这三个原则支持我克服了诸多难">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2018-11-10T16:00:58.863Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="行事三原则">
+<meta name="twitter:description" content="这阵子发现思考少了，浪多了，实在不该。原本想分享下上周我解不动，最后请AE team大佬帮忙解决的一道难题。原理是两个库的函数名相同且同时加载到内存中，导致执行bin档链接错误的vtable，引发coredump问题，不过昨天还是没能理解这套异常的发生机制和复现方案，所以分享不了，等我看下书，学习下再来。　　今早起来时想起过往一些事，也就想到自己处事的三个基本原则，这三个原则支持我克服了诸多难">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":true},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://donald-zhuang.github.io/2018/08/04/my-rules/"/>
+
+
+
+
+
+  <title>行事三原则 | 御风而行</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">御风而行</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://donald-zhuang.github.io/2018/08/04/my-rules/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Donald.Zhuang">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="御风而行">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">行事三原则</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-08-04T03:48:52-07:00">
+                2018-08-04
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/所思/" itemprop="url" rel="index">
+                    <span itemprop="name">所思</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+                <a href="/2018/08/04/my-rules/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count valine-comment-count" data-xid="/2018/08/04/my-rules/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+             <span id="/2018/08/04/my-rules/" class="leancloud_visitors" data-flag-title="行事三原则">
+               <span class="post-meta-divider">|</span>
+               <span class="post-meta-item-icon">
+                 <i class="fa fa-eye"></i>
+               </span>
+               
+                 <span class="post-meta-item-text">阅读次数&#58;</span>
+               
+                 <span class="leancloud-visitors-count"></span>
+             </span>
+          
+
+          
+
+          
+            <div class="post-wordcount">
+              
+                
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-file-word-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">字数统计&#58;</span>
+                
+                <span title="字数统计">
+                  1,639 字
+                </span>
+              
+
+              
+                <span class="post-meta-divider">|</span>
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-clock-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">阅读时长 &asymp;</span>
+                
+                <span title="阅读时长">
+                  6 分钟
+                </span>
+              
+            </div>
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>　　这阵子发现思考少了，浪多了，实在不该。原本想分享下上周我解不动，最后请AE team大佬帮忙解决的一道难题。原理是两个库的函数名相同且同时加载到内存中，导致执行bin档链接错误的vtable，引发coredump问题，不过昨天还是没能理解这套异常的发生机制和复现方案，所以分享不了，等我看下书，学习下再来。<br>　　今早起来时想起过往一些事，也就想到自己处事的三个基本原则，这三个原则支持我克服了诸多难题，经过各种实践后演化成为自己身体的一部分，也就觉得这个可以聊聊的。<br><a id="more"></a></p>
+<hr>
+<p>　　困难在我们成长道路上如影随行，每一次进步实际也是我们和困难搏斗后收获的成果。所以每当我们吐槽举步维艰之时，常会有朋友安慰道，“天将降大任于是人也，必先苦其心志，劳其筋骨，饿其体肤…”。这样看来，困难只是一种试炼，让我们看到当下的极限在哪，也让我们得以体验那种无力感。倘若能审时度势，顺势而为，也终能收秦破吴，担起“大任”。</p>
+<p>　　不过，这么多年的生活经历却也教我，有些困难真不是打打鸡血，咬咬牙就能过去的，有些时候还真需要你面对现实或破釜沉舟、或卧薪尝胆，至于结果最终也只能尽人事而听天命。对此，自己也长出一套对策，也就是开头说的三个原则，这三个原则在面临一些重要的问题时，常帮我度过一些难关。一句话总结出来就是，<strong>一切问题皆有解，一切都会过去，复盘成败。</strong></p>
+<p>　　<strong>一切问题皆有解</strong>。实际是我对<strong>Nothing is impossible</strong>的衍生，这句话对我的启发和影响更多在于视野上。现实生活中，很多看似难以理解或者不可解的问题，实际只是我们身在庐山，不识其真面目。就好比魔术，我们觉得不可能的事情，魔术师咫尺之间呈现在你面前，还能让你看不出一丝破绽，而生活中的困难和诸多难题又何不如此。也因此，当陷入困境之时，需要时刻提醒自己，要跳开出来，用第三方的视角审查周围的一切，找出自己不理解、不确定、不可能中的可能，找到那一丝线头，抽丝剥茧寻求答案。</p>
+<p>　　这种视野也让我发现很多让你深陷其中的难题是视野局限出来的，敢于挑战自己信仰的，反而会有更强大的进步。用马克·吐温的话说就是，<strong>“让我们陷入困境的不是无知，而是看似正确的谬误论断。”</strong>(“It ain’t what you don’t know that gets you into trouble. It’s what you know for sure that just ain’t so.”)，挑战并颠覆这样的“谬误论断”，能让你解决很多看似无解的问题。所以，困难之时，一定要坚信任何难题都有解，需要做的是冷静思考。既要看到自己的局限和无力之处，也要看到潜在的可能，不然最后就只能跟项羽一样自刎垓下。</p>
+<p>　　<strong>一切都会过去</strong>，原文为<strong>This too shall pass</strong>。这句来自一个所罗门王的一则<a href="http://kfbck.blog.163.com/blog/static/56013136200893095455577/" target="_blank" rel="noopener">寓言故事</a>。我一直很喜欢这句话，如所罗门王期待效果一样，“它有魔力，快乐的人看见它会变得悲伤；而悲伤的人看见它会变得快乐。”，每当遇到短时无法克服的困难，无法摆脱的困境时，我便会以此安慰自己。回头想想过往那些自认难熬的时刻如何度过，再想想未来回头再看此时的感觉，一些将变得如此平淡。当自己为了一时的成绩过于骄傲时，也会心里默念一遍压压自己。这样看问题也就会用更远的视角来审视此时，一切的一切并没什么大不了的。</p>
+<p>　　最后就是<strong>复盘成败</strong>。<a href="http://wiki.mbalib.com/wiki/%E5%A4%8D%E7%9B%98" target="_blank" rel="noopener">复盘来源于围棋术语</a>，是指下完一盘棋之后，重新在棋盘上把对弈过程走一遍，以期看清自己和对手各自短长，查漏补缺，实现棋艺的精进。我曾看过<a href="https://book.douban.com/subject/25702395/" target="_blank" rel="noopener">《复盘》</a>这本书，据说这个技巧在联想中被推行。我也曾在公司新生分享中，介绍过这个技能。我们常鼓励大家在有条件的时候多试错，而试错只是一个开头，其真正的目的在于随后的复盘和改进，《孟子·告天下》中提及，“人恒过，然后能改”，人只有多犯错或了解别人犯过的错，才能避免重蹈覆辙。</p>
+<p>　　除了复盘败和错，同样当你克服困难、取得胜利时，也值得去复盘，借此了解相关的模式在未来可否复现并助攻自己再次取得胜利，或者反向思考，当别人采用相同的方式决战自己时，有无方法攻克。我相信这一点在大疆的Robot Master大赛中，不少团队践行得很好，因为每年我们都会发现，去年一些优秀的战略或者攻防技术，在今年会被其他队伍学习推广开来，并取得更好的效果。同样，也会有相应措施来应对这样的策略。犹如达尔文的生物进化论，优胜略汰，好的基因不断遗传进化，繁衍更加优秀的生命。</p>
+<p>　　如上三条也就是我常提醒自己的原则或说策略，实际上复盘这条是为了不提出真正的第三条而顶上的。复盘目前我也还在学习和使用。这三条其实归结起来，前两条讲的是应对困境需要有的心态，不惧困难，寻求解决，克服不了时，也莫自甘堕落，应有卧薪尝胆之心，而最后一条则是寻求精进的策略，取一把柳叶刀剖开细看，自查自纠。人在不同阶段都会有不同的思维和决策原则，而这三条就是当下我所践行的。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+      <div>
+        <ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者：</strong>
+    Donald.Zhuang
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://donald-zhuang.github.io/2018/08/04/my-rules/" title="行事三原则">https://donald-zhuang.github.io/2018/08/04/my-rules/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>
+    本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" rel="external nofollow" target="_blank">CC BY-NC-SA 3.0</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+
+      </div>
+    
+
+    <footer class="post-footer">
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/07/21/Tips-About-Canary-in-GCC-SSP/" rel="next" title="GCC SSP Canary功能简介">
+                <i class="fa fa-chevron-left"></i> GCC SSP Canary功能简介
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/08/11/enlarge-Vision/" rel="prev" title="《见识》观后">
+                《见识》观后 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+      <div id="sidebar-dimmer"></div>
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+
+      <section class="site-overview-wrap sidebar-panel sidebar-panel-active">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/avatar.gif"
+                alt="Donald.Zhuang" />
+            
+              <p class="site-author-name" itemprop="name">Donald.Zhuang</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">5</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/donald-zhuang" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:yukunzhuang@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Donald.Zhuang</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+  <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+  <script src="//unpkg.com/valine/dist/Valine.min.js"></script>
+  
+  <script type="text/javascript">
+    var GUEST = ['nick','mail','link'];
+    var guest = 'nick,mail';
+    guest = guest.split(',').filter(item=>{
+      return GUEST.indexOf(item)>-1;
+    });
+    new Valine({
+        el: '#comments' ,
+        verify: false,
+        notify: false,
+        appId: 'sxusj7QM1yscw80QmXrzS7RF-gzGzoHsz',
+        appKey: 'LKGpEcrVf998QJrYCHajJsT8',
+        placeholder: 'Just go go',
+        avatar:'mm',
+        meta:guest,
+        pageSize:'10' || 10,
+        visitor: true,
+    });
+  </script>
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+  <script type="text/javascript" src="/js/src/js.cookie.js?v=5.1.4"></script>
+  <script type="text/javascript" src="/js/src/scroll-cookie.js?v=5.1.4"></script>
+
+
+  
+
+</body>
+</html>
