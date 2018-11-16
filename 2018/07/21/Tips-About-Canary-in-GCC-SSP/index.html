@@ -92,7 +92,7 @@
 <meta property="og:image" content="https://donald-zhuang.github.io/2018/07/21/Tips-About-Canary-in-GCC-SSP/DiffBetweenCanaryOnOff.png">
 <meta property="og:image" content="https://donald-zhuang.github.io/2018/07/21/Tips-About-Canary-in-GCC-SSP/stack.png">
 <meta property="og:image" content="https://donald-zhuang.github.io/2018/07/21/Tips-About-Canary-in-GCC-SSP/demoHeader.png">
-<meta property="og:updated_time" content="2018-11-10T16:00:58.923Z">
+<meta property="og:updated_time" content="2018-11-10T16:00:58.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="GCC SSP Canary功能简介">
 <meta name="twitter:description" content="处理一个开机coredump问题时，发现是一个必现canary问题，即内存越界访问。一般这类问题发生在数组越界访问，不过这次出现的rootcause有所不同，为代码未对齐导致结构体没对齐，继而在数据传输过程中出现访问越界。bug简单，但鉴于canary是一个有趣的设计，犹如人体免疫系统的表层屏障，能有效规避一些bug，因此我便萌生兴趣系统地了解这个机制，相关学习记录成此文。">
@@ -597,7 +597,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">7</span>
+                  <span class="site-state-item-count">9</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
@@ -619,7 +619,7 @@
               
               <div class="site-state-item site-state-tags">
                 <a href="/tags/index.html">
-                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-count">12</span>
                   <span class="site-state-item-name">标签</span>
                 </a>
               </div>

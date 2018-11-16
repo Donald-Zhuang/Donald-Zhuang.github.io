@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="gdb,mprotect,hardware breakpoint," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="御风而行" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="上周处理一个问题，发现一个共享对象的结构体全局变量数据异常。一开始怀疑是没dump成功，后面加log发现异常时对象被全清为0了，根据log该结构体某成员的值一会为0一会为1，也就初步定性为全局变量被踩，最终经过各种手段、法哥和kent大的助攻定位到原因，发现是一个不错的多进程环境内，共享对象全局变量问题。很好玩的一个问题，就此简要分享。">
+<meta name="keywords" content="gdb,mprotect,hardware breakpoint">
+<meta property="og:type" content="article">
+<meta property="og:title" content="多进程调用同一共享库内全局变量问题简单实例——全局变量被踩debug方法辑录">
+<meta property="og:url" content="https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/index.html">
+<meta property="og:site_name" content="御风而行">
+<meta property="og:description" content="上周处理一个问题，发现一个共享对象的结构体全局变量数据异常。一开始怀疑是没dump成功，后面加log发现异常时对象被全清为0了，根据log该结构体某成员的值一会为0一会为1，也就初步定性为全局变量被踩，最终经过各种手段、法哥和kent大的助攻定位到原因，发现是一个不错的多进程环境内，共享对象全局变量问题。很好玩的一个问题，就此简要分享。">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/memory_alloc.png">
+<meta property="og:updated_time" content="2018-11-16T12:30:37.431Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="多进程调用同一共享库内全局变量问题简单实例——全局变量被踩debug方法辑录">
+<meta name="twitter:description" content="上周处理一个问题，发现一个共享对象的结构体全局变量数据异常。一开始怀疑是没dump成功，后面加log发现异常时对象被全清为0了，根据log该结构体某成员的值一会为0一会为1，也就初步定性为全局变量被踩，最终经过各种手段、法哥和kent大的助攻定位到原因，发现是一个不错的多进程环境内，共享对象全局变量问题。很好玩的一个问题，就此简要分享。">
+<meta name="twitter:image" content="https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/memory_alloc.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":true},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/"/>
+
+
+
+
+
+  <title>多进程调用同一共享库内全局变量问题简单实例——全局变量被踩debug方法辑录 | 御风而行</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">御风而行</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Donald.Zhuang">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="御风而行">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">多进程调用同一共享库内全局变量问题简单实例——全局变量被踩debug方法辑录</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-11-16T10:10:04+08:00">
+                2018-11-16
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/技术整理/" itemprop="url" rel="index">
+                    <span itemprop="name">技术整理</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+                <a href="/2018/11/15/GlobalVariableInSoForMultihread/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count valine-comment-count" data-xid="/2018/11/15/GlobalVariableInSoForMultihread/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+             <span id="/2018/11/15/GlobalVariableInSoForMultihread/" class="leancloud_visitors" data-flag-title="多进程调用同一共享库内全局变量问题简单实例——全局变量被踩debug方法辑录">
+               <span class="post-meta-divider">|</span>
+               <span class="post-meta-item-icon">
+                 <i class="fa fa-eye"></i>
+               </span>
+               
+                 <span class="post-meta-item-text">阅读次数&#58;</span>
+               
+                 <span class="leancloud-visitors-count"></span>
+             </span>
+          
+
+          
+
+          
+            <div class="post-wordcount">
+              
+                
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-file-word-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">字数统计&#58;</span>
+                
+                <span title="字数统计">
+                  3,805 字
+                </span>
+              
+
+              
+                <span class="post-meta-divider">|</span>
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-clock-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">阅读时长 &asymp;</span>
+                
+                <span title="阅读时长">
+                  17 分钟
+                </span>
+              
+            </div>
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>　　上周处理一个问题，发现一个共享对象的结构体全局变量数据异常。一开始怀疑是没dump成功，后面加log发现异常时对象被全清为0了，根据log该结构体某成员的值一会为0一会为1，也就初步定性为全局变量被踩，最终经过各种手段、法哥和kent大的助攻定位到原因，发现是一个不错的多进程环境内，共享对象全局变量问题。很好玩的一个问题，就此简要分享。<br><a id="more"></a></p>
+<hr>
+<p>　　<em>“错误包含丰富的信息”　—— Nassim Nicholas Taleb《Antifragile》</em><br>　　前置信息，如下log均是构造出来的，仅作模拟的例子，所以全部log的时间都是一样的，实际问题和debug过程比这篇文章描述的复杂也乱，不过一开始错误的思维定势埋坑，以及debug过程被各种打断导致debug不连续，也让我有冲动梳理这个问题的原因，借以总结一下全局变量数据异常时候的处理方法，以后做check list。</p>
+<h3 id="1-确定是否有异常读写行为"><a href="#1-确定是否有异常读写行为" class="headerlink" title="1. 确定是否有异常读写行为"></a>1. 确定是否有异常读写行为</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">1.</span> 所有用到该结构体的函数入口皆加入如下打印：</span><br><span class="line"><span class="built_in">printf</span>(<span class="string">"%s-%d &gt;&gt; stConfig.bUsing[%d] [%p]\r\n"</span>, __FUNCTION__,__LINE__ ,stConfig.bUsing, &amp;stConfig);</span><br><span class="line"><span class="number">2.</span> 异常<span class="built_in">log</span>如下：</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _XXXMAP_DumpTable_U2<span class="number">-2869</span>  &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line">__01<span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  XXX_DumpPanelInfo<span class="number">-1706</span>     &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]__</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.914</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _SetXXXParams<span class="number">-644</span>          &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-1846</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Fmodulation<span class="number">-1953</span>    &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Rdeviation<span class="number">-2034</span>     &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_En<span class="number">-1928</span>             &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Fmodulation<span class="number">-1953</span>    &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Rdeviation<span class="number">-2034</span>     &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_En<span class="number">-1928</span>             &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.594</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br></pre></td></tr></table></figure>
+<p>　　刚开始debug加的log如上。可以看出，所有用到这个变量的函数都在同个进程同个线程（PID-2048）中执行，也就首先排除多线程并发引发的全局变量数据篡改问题。第一个要怀疑的是在这些函数中有地方去操作这个变量，于是check source code，发现整个程序只有XXX_DumpPanelInfo这个函数会去操作这个对象，大致代码如下，可见函数执行后stConfig便不会为0，那下一个需要确认的就是是否有对这个全局变量的指针引用，这种行为也可以导致数据被写坏，但review了一轮source code，发现并没有，同时也没发现有同名全局变量的存在（避免so链接过程出现全局变量覆盖问题）。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">XXX_DumpPanelInfo</span><span class="params">(&amp;stConfig)</span></span></span><br><span class="line"><span class="function"></span>&#123;   </span><br><span class="line">    <span class="built_in">memset</span>(&amp;stConfig, <span class="number">0</span>, <span class="keyword">sizeof</span>(stConfig))；</span><br><span class="line">    stConfig.bUsing = TRUE;</span><br><span class="line">    ... <span class="comment">// 对stConfig其他成员的操作</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<h3 id="2-上GDB确认问题"><a href="#2-上GDB确认问题" class="headerlink" title="2. 上GDB确认问题"></a>2. 上GDB确认问题</h3><p>　　经过这第一轮debug，初步推断为其他全局变量越界踩的问题。在说明我采用的gdb debug方式之前，我们先讲下gdb的watch功能。一般而言，如果不方便review code却又想尽快抓到修改变量的地方，我们可以通过gdb watch功能来实现。但他也有局限性，具体实例如下。我们可以看出，watch适用于同进程内直接对变量访问时的监控，对于越界访问检测没有太大的助力。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">(gdb) l</span><br><span class="line"><span class="number">1</span>       <span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="number">2</span>       <span class="keyword">int</span> gVar[<span class="number">2</span>]=&#123;<span class="number">0</span>,<span class="number">0</span>&#125;;</span><br><span class="line"><span class="number">3</span>       <span class="keyword">int</span> gVar2 = <span class="number">0</span>;</span><br><span class="line"><span class="number">4</span></span><br><span class="line"><span class="number">5</span>       <span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function">6       </span>&#123;</span><br><span class="line"><span class="number">7</span>           <span class="built_in">printf</span>(<span class="string">"gVar&gt;&gt;%p, gVar2&gt;&gt;%p\r\n"</span>, gVar,&amp;gVar2 );</span><br><span class="line"><span class="number">8</span>           gVar[<span class="number">2</span>] = <span class="number">2</span>;</span><br><span class="line"><span class="number">9</span>           <span class="built_in">printf</span>(<span class="string">"global_uninit_var&gt;&gt;%d\r\n"</span>, gVar2);</span><br><span class="line"><span class="number">10</span>          <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"><span class="number">11</span>      &#125;</span><br><span class="line">(gdb) watch gVar2</span><br><span class="line">Hardware watchpoint <span class="number">1</span>: gVar2</span><br><span class="line">(gdb) run</span><br><span class="line">Starting program: /home/donald-zhuang/Desktop/demo/a.out </span><br><span class="line">gVar&gt;&gt;<span class="number">0x601040</span>, gVar2&gt;&gt;<span class="number">0x601048</span></span><br><span class="line"></span><br><span class="line">Hardware watchpoint <span class="number">1</span>: gVar2</span><br><span class="line"></span><br><span class="line">Old value = <span class="number">0</span></span><br><span class="line">New value = <span class="number">2</span></span><br><span class="line">main () at SimpleSection.c:<span class="number">9</span></span><br><span class="line"><span class="number">9</span>           <span class="built_in">printf</span>(<span class="string">"global_uninit_var&gt;&gt;%d\r\n"</span>, gVar2);</span><br></pre></td></tr></table></figure></p>
+<p>　　不过gdb的x功能弥补上面这个缺陷的方法，就是在watch抓到变量异常的时候，第一时间查看进程内存布局。下面续上面的gdb流程，通过print gVar2的地址，我们可以在其地址减1来找到他的上家，继而定位到是谁越界了，这个例子中，我们可以看到就是gVar了，找到调用这个数组的地方，review code即可发现问题所在。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Old value = <span class="number">0</span></span><br><span class="line">New value = <span class="number">2</span></span><br><span class="line">main () at SimpleSection.c:<span class="number">9</span></span><br><span class="line"><span class="number">9</span>           <span class="built_in">printf</span>(<span class="string">"global_uninit_var&gt;&gt;%d\r\n"</span>, gVar2);</span><br><span class="line">(gdb) p &amp;gVar2</span><br><span class="line">$<span class="number">1</span> = (<span class="keyword">int</span> *) <span class="number">0x601048</span> &lt;gVar2&gt;</span><br><span class="line">(gdb) x/<span class="number">4</span>x <span class="number">0x601048</span><span class="number">-1</span></span><br><span class="line"><span class="number">0x601047</span> &lt;gVar+<span class="number">7</span>&gt;:      <span class="number">0x00000200</span>      <span class="number">0x00000000</span>      <span class="number">0x00000000</span>      <span class="number">0x00000000</span></span><br></pre></td></tr></table></figure></p>
+<p>　　因为其他原因，我这边的做法是在抓到异常数据的地方，也就是在SetXXX_Fmodulation-1953入口处加了一个abort，让它coredump，然后通过coredump解析当前内存布局和进程情况。解析coredump可以看到如下信息，被踩的对象就是config那一块，但其前面的对象是两个锁，还有m_vTag这个对象，通过print m_vTag这个对象，可以看到其成员数据合法、非零，故此不存在前面数据大范围越界踩到stConfig的问题。那就迷糊了，难不成是其他地方的虚地址错误然后神奇得踩到这个位置。<br><img src="/2018/11/15/GlobalVariableInSoForMultihread/memory_alloc.png" title="Memory Info"></p>
+<h3 id="3-mprotect与kernel-hardware-breakpoint"><a href="#3-mprotect与kernel-hardware-breakpoint" class="headerlink" title="3. mprotect与kernel hardware breakpoint"></a>3. mprotect与kernel hardware breakpoint</h3><p>　　对于这种无解的问题，就要上利器了，因为我们的code中有支持kernel hardware breakpoint，所以我就直接上了，这部分有兴趣大家可以参考这篇博文<a href="https://blog.csdn.net/phenix_lord/article/details/41415559" target="_blank" rel="noopener">内核模块踩内存问题定位利器- hardware breakpoint</a>，参考的实例代码如下。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">sample_hbp_handler</span><span class="params">(struct perf_event *bp,</span></span></span><br><span class="line"><span class="function"><span class="params">			       struct perf_sample_data *data,</span></span></span><br><span class="line"><span class="function"><span class="params">			       struct pt_regs *regs)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	printk(KERN_INFO <span class="string">"%s value is changed\n"</span>, ksym_name);</span><br><span class="line">	dump_stack();</span><br><span class="line">	printk(KERN_INFO <span class="string">"Dump stack from sample_hbp_handler\n"</span>);</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">static</span> <span class="keyword">int</span> __<span class="function">init <span class="title">hw_break_module_init</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	<span class="keyword">int</span> ret;</span><br><span class="line">	<span class="class"><span class="keyword">struct</span> <span class="title">perf_event_attr</span> <span class="title">attr</span>;</span></span><br><span class="line">    </span><br><span class="line">	hw_breakpoint_init(&amp;attr);</span><br><span class="line">	attr.bp_addr = kallsyms_lookup_name(ksym_name);<span class="comment">//待监视的地址，指令和数据地址均可以</span></span><br><span class="line">	attr.bp_len = HW_BREAKPOINT_LEN_4;</span><br><span class="line">	attr.bp_type = HW_BREAKPOINT_W | HW_BREAKPOINT_R;<span class="comment">//待监视的访问类型</span></span><br><span class="line">       <span class="comment">//sample_hbp_handler为待监视的地址被访问时调用</span></span><br><span class="line">	sample_hbp = register_wide_hw_breakpoint(&amp;attr, sample_hbp_handler, <span class="literal">NULL</span>);</span><br><span class="line">	<span class="keyword">if</span> (IS_ERR((<span class="keyword">void</span> __force *)sample_hbp)) &#123;</span><br><span class="line">		ret = PTR_ERR((<span class="keyword">void</span> __force *)sample_hbp);</span><br><span class="line">		<span class="keyword">goto</span> fail;</span><br><span class="line">	&#125;</span><br><span class="line">	printk(KERN_INFO <span class="string">"HW Breakpoint for %s write installed\n"</span>, ksym_name);</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    </span><br><span class="line">fail:</span><br><span class="line">	printk(KERN_INFO <span class="string">"Breakpoint registration failed\n"</span>);</span><br><span class="line">	<span class="keyword">return</span> ret;</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __<span class="function"><span class="built_in">exit</span> <span class="title">hw_break_module_exit</span><span class="params">(<span class="keyword">void</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">	unregister_wide_hw_breakpoint(sample_hbp);</span><br><span class="line">	printk(KERN_INFO <span class="string">"HW Breakpoint for %s write uninstalled\n"</span>, ksym_name);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>　　不过不幸的是，因为某些原因，code中的HW BP并没有支持好，导致没能顺利抓到异常访问行为，就此作罢。既然被踩，那还可以上一招，mprotect，这个函数是通过设置进程内页属性，来实现对内存的读写保护，因为是设置页的属性，这也就决定了该函数能保护的内存需要4K对齐且大小也需要为4K倍数。具体可参考<a href="http://man7.org/linux/man-pages/man2/mprotect.2.html" target="_blank" rel="noopener">Linux Programmer’s Manual</a>。我们的全局变量没有4K大，也就需要构造下，然后验证下问题是否还能复现，具体的操作是根据实际情况对结构体定义调整，类似如下方式塞入dummy数据，然后复现问题，加完之后发现问题依旧复现得到（我在这里怀疑人生了…后加打印发现编译器优化了结构体布局，stConfig.bUsing仍然在首部）。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">STCONFIG</span></span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">    <span class="keyword">char</span> dummy[<span class="number">4095</span>];</span><br><span class="line">    BOOL bUsing;</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">char</span> dummy2[<span class="number">4095</span>];</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></p>
+<p>　　既然复现得到，那就加mprotect保护。我们必须在dump数据后对该区域进行保护，其中第三行是保证地址是4K对齐的，PROT_READ表示将该页设置为只读的。这个函数执行完后，进程内其他地方如果尝试写或执行便会引发页错误，导致coredump，这样我们也就抓到异常点了。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">XXX_DumpPanelInfo(&amp;stConfig);   <span class="comment">// ensure the data have been initialized</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> PAGE_ALIGN_SIZE (4096)  <span class="comment">// the size of page</span></span></span><br><span class="line"><span class="keyword">char</span> *pstConfig = (<span class="keyword">char</span>*)(((<span class="keyword">int</span>)(&amp;stConfig) + PAGE_ALIGN_SIZE - <span class="number">1</span>) &amp; (~(PAGE_ALIGN_SIZE<span class="number">-1</span>))); <span class="comment">// align to page size</span></span><br><span class="line"><span class="keyword">if</span>(mprotect((<span class="keyword">void</span>*)pstConfig, PAGE_ALIGN_SIZE, PROT_READ))</span><br><span class="line">&#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">"protect failed!\r\n"</span>)</span><br><span class="line">&#125;</span><br><span class="line">保护执行的打印</span><br><span class="line"><span class="built_in">printf</span>(<span class="string">"%s-%d &gt;&gt; stConfig.bUsing[%d] [%p]\r\n"</span>, __FUNCTION__,__LINE__, stConfig.bUsing, &amp;(stConfig.bUsing));</span><br></pre></td></tr></table></figure></p>
+<p>　　调整后得到如下log，我们可以看到加粗的两行log，人家不仅进了两次保护，还写了两次！然后没有任何coredump。于是我在加保护之后，尝试补一个写操作，结果如期出现coredump，也就证明保护实际是起效。在这情况下，我老板提醒了我mprotect是同进程内有效，跨进程无效，故以此为根基进入下一个debug。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _XXXMAP_DumpTable_U2<span class="number">-2869</span>  &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  XXX_DumpPanelInfo<span class="number">-1706</span>     &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line">__01<span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  XXX_DumpPanelInfo - <span class="number">2874</span>   &gt;&gt; mprotect addr <span class="number">0xea00795c</span> &gt;&gt; <span class="number">0xea00795c</span>__</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.914</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _SetXXXParams<span class="number">-644</span>        &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-1846</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Fmodulation<span class="number">-1953</span>    &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Rdeviation<span class="number">-2034</span>     &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_En<span class="number">-1928</span>             &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Fmodulation<span class="number">-1953</span>    &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_Rdeviation<span class="number">-2034</span>     &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  SetXXX_En<span class="number">-1928</span>             &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.594</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  _XXXMAP_DumpTable_U2<span class="number">-2869</span>  &gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  XXX_DumpPanelInfo<span class="number">-1706</span>     &gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line">__01<span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.913</span> <span class="number">2048</span> <span class="number">2048</span> I Process:  XXX_DumpPanelInfo - <span class="number">2874</span>   &gt;&gt; mprotect addr <span class="number">0xea00795c</span> &gt;&gt; <span class="number">0xea00795c</span> __</span><br></pre></td></tr></table></figure></p>
+<h3 id="4-印PID，共享库全局变量问题"><a href="#4-印PID，共享库全局变量问题" class="headerlink" title="4. 印PID，共享库全局变量问题"></a>4. 印PID，共享库全局变量问题</h3><p>　　基于各种对变量被踩debug的不合理现象，问题的本质实际在不断展露。不过我还没能抓到点，找老板指点，在如上基础上，我老板让我在log上印pid，结果如下。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">printf</span>(<span class="string">"%s-%d PID(%d)&gt;&gt; stConfig.bUsing[%d] [%p]\r\n"</span>, __FUNCTION__,__LINE__, getpid(),stConfig.bUsing, &amp;stConfig);</span><br><span class="line"></span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _XXXMAP_DumpTable_U2<span class="number">-2869</span>  (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  XXX_DumpPanelInfo<span class="number">-1706</span>     (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line">__01<span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.913</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  XXX_DumpPanelInfo - <span class="number">2874</span>   (PID<span class="number">-2065</span>)&gt;&gt; mprotect addr <span class="number">0xea00795c</span> &gt;&gt; <span class="number">0xea00795c</span>__</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">02.914</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _SetXXXParams<span class="number">-644</span>        (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _GetStatusEx_U2<span class="number">-1846</span>       (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.146</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">03.351</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _GetStatusEx_U2<span class="number">-2009</span>       (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  SetXXX_Fmodulation<span class="number">-1953</span>    (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  SetXXX_Rdeviation<span class="number">-2034</span>     (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.265</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  SetXXX_En<span class="number">-1928</span>             (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  SetXXX_Fmodulation<span class="number">-1953</span>    (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  SetXXX_Rdeviation<span class="number">-2034</span>     (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">06.267</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  SetXXX_En<span class="number">-1928</span>             (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.594</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  GetDataFromRegister<span class="number">-1872</span>   (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.913</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  _XXXMAP_DumpTable_U2<span class="number">-2869</span>  (PID<span class="number">-2066</span>)&gt;&gt; stConfig.bUsing[<span class="number">0</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line"><span class="number">01</span><span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.913</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  XXX_DumpPanelInfo<span class="number">-1706</span>     (PID<span class="number">-2065</span>)&gt;&gt; stConfig.bUsing[<span class="number">1</span>] [<span class="number">0xea00795c</span>]</span><br><span class="line">__01<span class="number">-01</span> <span class="number">08</span>:<span class="number">00</span>:<span class="number">08.913</span> <span class="number">2052</span> <span class="number">2052</span> I Process:  XXX_DumpPanelInfo - <span class="number">2874</span>   (PID<span class="number">-2066</span>)&gt;&gt; mprotect addr <span class="number">0xea00795c</span> &gt;&gt; <span class="number">0xea00795c</span> __</span><br></pre></td></tr></table></figure></p>
+<p>　　打印相关进程的PID信息如下，根据进程文件可知，如下多个进程都是同一个bin档实现的服务，然后经过2052的logwrapper将log打印出来，因此log上的PID都是logwrapper的，至此问题也昭然若揭，上面debug的各种不合理之处也就有了明确的解释了。如上所看为何变量地址一样，为何Mprotect“起效和失效”，在这里可以看到，是一个典型的动态库内全局变量问题。</p>
+<blockquote>
+<p>console:/# busybox ps | grep Process<br>1984 0        0:00 /application/bin/Process<br>2052 0        0:00 {logwrapper}/application/bin/Process<br>2065 0        0:43 /application/bin/Process<br>2066 0        6:52 {ServiceAProcess}/application/bin/Process<br>2067 0        0:00 {ServiceBProcess}/application/bin/Process</p>
+</blockquote>
+<p>　　关于这个问题，本质是共享对象中的全局变量会在可执行档中有一个副本，并且实际运行中采用的便是这个副本，不同进程对同一个共享对象的全局变量引用是各自独立的。我前阵子看的程序员自我修养第196面中，有如下解释</p>
+<blockquote>
+<p>由于可执行文件在运行时并不进行代码重定位，所以变量的地址必须在链接过程中确定下来，为了能使得链接过程正常进行，链接器会在创建可执行文件时，在它的.bss段创建一个global变量的副本。那么问题就很明显了，现在global变量定义在原先的共享对象中，而在可执行文件的bss段中还有一个副本，如果同一变量同时存在于多个位置中，这在程序的实际运行过程中肯定是不可行的。<br>于是解决办法只有一个，那就是所有的使用这个变量的指令都指向位于可执行文件中的那个副本。elf共享库编译时，默认都把定义在模块内部的全局变量当做定义在其他模块的全局变量。…</p>
+<ul>
+<li>——《程序员的自我修养》P196*</li>
+</ul>
+</blockquote>
+<h3 id="5-终章，我要去赶飞机了"><a href="#5-终章，我要去赶飞机了" class="headerlink" title="5. 终章，我要去赶飞机了"></a>5. 终章，我要去赶飞机了</h3><p>　　至此问题也就解决了，根本原因也就是两个不同的进程对同一个共享库的全局变量进行引用，而我们的多个服务进程是基于同一个bin通过不同参数启动，coder没有注意到两个module不在同个service进程中，导致采用的全局变量没能正确初始化，继而导致异常的发生。当然实际问题比这个更复杂，debug理清过程也花了我两天的时间，不过这次也是有收获的，哈哈，读书有用啊。我要赶飞机了，梳理就暂时到此，下次再调整下文章和引用的。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+      <div>
+        <ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者：</strong>
+    Donald.Zhuang
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/" title="多进程调用同一共享库内全局变量问题简单实例——全局变量被踩debug方法辑录">https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>
+    本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" rel="external nofollow" target="_blank">CC BY-NC-SA 3.0</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+
+      </div>
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/gdb/" rel="tag"># gdb</a>
+          
+            <a href="/tags/mprotect/" rel="tag"># mprotect</a>
+          
+            <a href="/tags/hardware-breakpoint/" rel="tag"># hardware breakpoint</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/08/11/enlarge-Vision/" rel="next" title="《见识》观后">
+                <i class="fa fa-chevron-left"></i> 《见识》观后
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+      <div id="sidebar-dimmer"></div>
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/avatar.gif"
+                alt="Donald.Zhuang" />
+            
+              <p class="site-author-name" itemprop="name">Donald.Zhuang</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">5</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">12</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/donald-zhuang" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:yukunzhuang@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-确定是否有异常读写行为"><span class="nav-number">1.</span> <span class="nav-text">1. 确定是否有异常读写行为</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#2-上GDB确认问题"><span class="nav-number">2.</span> <span class="nav-text">2. 上GDB确认问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#3-mprotect与kernel-hardware-breakpoint"><span class="nav-number">3.</span> <span class="nav-text">3. mprotect与kernel hardware breakpoint</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#4-印PID，共享库全局变量问题"><span class="nav-number">4.</span> <span class="nav-text">4. 印PID，共享库全局变量问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#5-终章，我要去赶飞机了"><span class="nav-number">5.</span> <span class="nav-text">5. 终章，我要去赶飞机了</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Donald.Zhuang</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+  <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+  <script src="//unpkg.com/valine/dist/Valine.min.js"></script>
+  
+  <script type="text/javascript">
+    var GUEST = ['nick','mail','link'];
+    var guest = 'nick,mail';
+    guest = guest.split(',').filter(item=>{
+      return GUEST.indexOf(item)>-1;
+    });
+    new Valine({
+        el: '#comments' ,
+        verify: false,
+        notify: false,
+        appId: 'sxusj7QM1yscw80QmXrzS7RF-gzGzoHsz',
+        appKey: 'LKGpEcrVf998QJrYCHajJsT8',
+        placeholder: 'Just go go',
+        avatar:'mm',
+        meta:guest,
+        pageSize:'10' || 10,
+        visitor: true,
+    });
+  </script>
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+  <script type="text/javascript" src="/js/src/js.cookie.js?v=5.1.4"></script>
+  <script type="text/javascript" src="/js/src/scroll-cookie.js?v=5.1.4"></script>
+
+
+  
+
+</body>
+</html>

@@ -2,72 +2,86 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://donald-zhuang.github.io/categories/index.html</loc>
+    <loc>https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/</loc>
     
-    <lastmod>2018-11-10T16:00:58.927Z</lastmod>
+    <lastmod>2018-11-16T12:30:37.431Z</lastmod>
     
   </url>
   
   <url>
-    <loc>https://donald-zhuang.github.io/about/index.html</loc>
+    <loc>https://donald-zhuang.github.io/2018/05/02/DebugTips/</loc>
     
-    <lastmod>2018-11-10T16:00:58.927Z</lastmod>
+    <lastmod>2018-11-11T02:52:28.000Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://donald-zhuang.github.io/2018/07/08/ChunQiu/</loc>
     
-    <lastmod>2018-11-10T16:00:58.923Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://donald-zhuang.github.io/2018/07/21/Tips-About-Canary-in-GCC-SSP/</loc>
-    
-    <lastmod>2018-11-10T16:00:58.923Z</lastmod>
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://donald-zhuang.github.io/2018/05/02/Debug%20CheckList/</loc>
     
-    <lastmod>2018-11-10T16:00:58.863Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://donald-zhuang.github.io/2018/08/11/enlarge-Vision/</loc>
-    
-    <lastmod>2018-11-10T16:00:58.863Z</lastmod>
-    
-  </url>
-  
-  <url>
-    <loc>https://donald-zhuang.github.io/2018/06/23/From-The-Den/</loc>
-    
-    <lastmod>2018-11-10T16:00:58.863Z</lastmod>
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://donald-zhuang.github.io/2018/08/04/my-rules/</loc>
     
-    <lastmod>2018-11-10T16:00:58.863Z</lastmod>
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://donald-zhuang.github.io/2018/06/23/From-The-Den/</loc>
+    
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://donald-zhuang.github.io/2018/08/11/enlarge-Vision/</loc>
+    
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://donald-zhuang.github.io/2017/07/24/TinyHttpd%20Analysis/</loc>
     
-    <lastmod>2018-11-10T16:00:58.863Z</lastmod>
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://donald-zhuang.github.io/2018/07/21/Tips-About-Canary-in-GCC-SSP/</loc>
+    
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://donald-zhuang.github.io/about/index.html</loc>
+    
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://donald-zhuang.github.io/categories/index.html</loc>
+    
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
   </url>
   
   <url>
     <loc>https://donald-zhuang.github.io/tags/index.html</loc>
     
-    <lastmod>2018-11-10T16:00:58.863Z</lastmod>
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
   </url>
   
