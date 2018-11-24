@@ -2,6 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://donald-zhuang.github.io/2018/11/24/efence/</loc>
+    
+    <lastmod>2018-11-24T18:22:14.577Z</lastmod>
+    
+  </url>
+  
+  <url>
     <loc>https://donald-zhuang.github.io/2018/11/15/GlobalVariableInSoForMultihread/</loc>
     
     <lastmod>2018-11-16T15:25:08.667Z</lastmod>
@@ -30,14 +37,14 @@
   </url>
   
   <url>
-    <loc>https://donald-zhuang.github.io/2018/08/11/enlarge-Vision/</loc>
+    <loc>https://donald-zhuang.github.io/2018/06/23/From-The-Den/</loc>
     
     <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
   </url>
   
   <url>
-    <loc>https://donald-zhuang.github.io/2018/06/23/From-The-Den/</loc>
+    <loc>https://donald-zhuang.github.io/2018/08/11/enlarge-Vision/</loc>
     
     <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     
@@ -58,13 +65,6 @@
   </url>
   
   <url>
-    <loc>https://donald-zhuang.github.io/tags/index.html</loc>
-    
-    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
-    
-  </url>
-  
-  <url>
     <loc>https://donald-zhuang.github.io/categories/index.html</loc>
     
     <lastmod>2018-11-10T16:00:58.000Z</lastmod>
@@ -73,6 +73,13 @@
   
   <url>
     <loc>https://donald-zhuang.github.io/about/index.html</loc>
+    
+    <lastmod>2018-11-10T16:00:58.000Z</lastmod>
+    
+  </url>
+  
+  <url>
+    <loc>https://donald-zhuang.github.io/tags/index.html</loc>
     
     <lastmod>2018-11-10T16:00:58.000Z</lastmod>
     

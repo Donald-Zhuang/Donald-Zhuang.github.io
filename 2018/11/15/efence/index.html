@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="gdb,mprotect,efence,内存越界访问," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="御风而行" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="内存越界类问题都不太好搞，但也充满乐趣，有如侦探抽丝剥茧般。因为处理过好些这类问题，因此有想法将这些手段总汇起来，然后建立成一个辑录，以供参考。实际第一篇也早已做出，即GCC SSP Canary功能简介一篇，这也就是第二篇了。这次介绍efence，从efence开始主要是因其代码简单，一来方便阅读，二来方便自己修改优化。小工具用好即为神器，会用然后再做修改，便能顺心随意。最后的总结也提及一个">
+<meta name="keywords" content="gdb,mprotect,efence,内存越界访问">
+<meta property="og:type" content="article">
+<meta property="og:title" content="内存异常处理手段总汇 一 -- electric-fence及其源码解析">
+<meta property="og:url" content="https://donald-zhuang.github.io/2018/11/15/efence/index.html">
+<meta property="og:site_name" content="御风而行">
+<meta property="og:description" content="内存越界类问题都不太好搞，但也充满乐趣，有如侦探抽丝剥茧般。因为处理过好些这类问题，因此有想法将这些手段总汇起来，然后建立成一个辑录，以供参考。实际第一篇也早已做出，即GCC SSP Canary功能简介一篇，这也就是第二篇了。这次介绍efence，从efence开始主要是因其代码简单，一来方便阅读，二来方便自己修改优化。小工具用好即为神器，会用然后再做修改，便能顺心随意。最后的总结也提及一个">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/15/efence/efence.png">
+<meta property="og:updated_time" content="2018-11-24T17:27:13.824Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="内存异常处理手段总汇 一 -- electric-fence及其源码解析">
+<meta name="twitter:description" content="内存越界类问题都不太好搞，但也充满乐趣，有如侦探抽丝剥茧般。因为处理过好些这类问题，因此有想法将这些手段总汇起来，然后建立成一个辑录，以供参考。实际第一篇也早已做出，即GCC SSP Canary功能简介一篇，这也就是第二篇了。这次介绍efence，从efence开始主要是因其代码简单，一来方便阅读，二来方便自己修改优化。小工具用好即为神器，会用然后再做修改，便能顺心随意。最后的总结也提及一个">
+<meta name="twitter:image" content="https://donald-zhuang.github.io/2018/11/15/efence/efence.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":true},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://donald-zhuang.github.io/2018/11/15/efence/"/>
+
+
+
+
+
+  <title>内存异常处理手段总汇 一 -- electric-fence及其源码解析 | 御风而行</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">御风而行</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://donald-zhuang.github.io/2018/11/15/efence/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Donald.Zhuang">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="御风而行">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">内存异常处理手段总汇 一 -- electric-fence及其源码解析</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-11-16T10:10:04+08:00">
+                2018-11-16
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/技术整理/" itemprop="url" rel="index">
+                    <span itemprop="name">技术整理</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+                <a href="/2018/11/15/efence/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count valine-comment-count" data-xid="/2018/11/15/efence/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+             <span id="/2018/11/15/efence/" class="leancloud_visitors" data-flag-title="内存异常处理手段总汇 一 -- electric-fence及其源码解析">
+               <span class="post-meta-divider">|</span>
+               <span class="post-meta-item-icon">
+                 <i class="fa fa-eye"></i>
+               </span>
+               
+                 <span class="post-meta-item-text">阅读次数&#58;</span>
+               
+                 <span class="leancloud-visitors-count"></span>
+             </span>
+          
+
+          
+
+          
+            <div class="post-wordcount">
+              
+                
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-file-word-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">字数统计&#58;</span>
+                
+                <span title="字数统计">
+                  5,697 字
+                </span>
+              
+
+              
+                <span class="post-meta-divider">|</span>
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-clock-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">阅读时长 &asymp;</span>
+                
+                <span title="阅读时长">
+                  27 分钟
+                </span>
+              
+            </div>
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>　　内存越界类问题都不太好搞，但也充满乐趣，有如侦探抽丝剥茧般。因为处理过好些这类问题，因此有想法将这些手段总汇起来，然后建立成一个辑录，以供参考。实际第一篇也早已做出，即<a href="https://donald-zhuang.github.io/2018/07/21/Tips-About-Canary-in-GCC-SSP/">GCC SSP Canary功能简介</a>一篇，这也就是第二篇了。这次介绍efence，从efence开始主要是因其代码简单，一来方便阅读，二来方便自己修改优化。小工具用好即为神器，会用然后再做修改，便能顺心随意。最后的总结也提及一个修改tcmalloc实现自己需求的团队例子。<br><a id="more"></a></p>
+<hr>
+<p><a href="https://github.com/CheggEng/electric-fence/tree/master" title="Electric-Fence Githubs" target="_blank" rel="noopener">electric-fence</a> 是一款malloc类函数内存调试工具，主要通过mprotect对memalign、malloc、free、valloc、calloc、strndup、strdup、realloc等函数进行重写。这个实现也就决定其只能用于内存越界访问行为debug，没法检测内存泄漏，也无法正确定位（是无法正确定位，不是不能定位）C++中new, new[], delete, delete[]的问题。想起曾有大佬让我用efence查内存泄漏，而且还是对象泄漏问题…<br>efence的核心实现有三个函数initialize、memalign、free，捋顺这三个，整个工作机制也就打通了。</p>
+<h3 id="LD-PRELOAD和GDB中使用eFence"><a href="#LD-PRELOAD和GDB中使用eFence" class="headerlink" title="LD_PRELOAD和GDB中使用eFence"></a>LD_PRELOAD和GDB中使用eFence</h3><p>　　如果你只想了解最核心的原理，可以直接通过本文<a href="#allocator-realization">memalign实现 – allocator核心</a>一节了解，然后直接参考[使用efence检测内存泄漏问题][2]这篇文章使用efence了。除了这篇文章中介绍的debug方式，补充下另外两种。<br>　　如果是已经编译好的未链接libefence的bin档，我们可以通过”LD_PRELOAD=/usr/lib/libefence.so bin”来预加载libefence.so再执行bin，实现efence符号对libc中malloc符号的覆盖。<br>　　gdb则可在.gdbinit增加如下代码，在此基础上也可增加你需要的配置（具体参考[efence - Linux man page][4]介绍），然后debug对应程序时，执行efence on即可开启对应功能。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">define efence</span><br><span class="line">        <span class="built_in">set</span> environment EF_ALLOW_MALLOC_0 <span class="number">0</span></span><br><span class="line">        <span class="built_in">set</span> environment LD_PRELOAD /usr/lib/libefence.so<span class="number">.0</span><span class="number">.0</span></span><br><span class="line">        echo Enabled eFence\n</span><br><span class="line">end</span><br></pre></td></tr></table></figure></p>
+<h3 id="initialize-配置库运行功能和创建内存索引"><a href="#initialize-配置库运行功能和创建内存索引" class="headerlink" title="initialize - 配置库运行功能和创建内存索引"></a>initialize - 配置库运行功能和创建内存索引</h3><p>　　顾名思义，initialize函数完成整个库的初始化和环境配置工作。其实现主要分为两部分，第一部分是通过环境变量获取各项功能开关设置，第二部分是申请一块不小于1M的内存并配置相关数据结构。</p>
+<h4 id="功能开关配置"><a href="#功能开关配置" class="headerlink" title="功能开关配置"></a>功能开关配置</h4><p>使能对应功能，首先需要code中配置对应变量为-1，然后通过同名环境变量来实现对对应功能的开关，相关变量大概说明如下。</p>
+<ol>
+<li>EF_DISABLE_BANNER:是否打印库版本信息</li>
+<li>EF_ALIGNMENT:Efence malloc分配空间的内存对齐字节数，默认值为sizeof(int)，这个值也是Efence能够检测的内存越界的最小值。</li>
+<li>EF_PROTECT_BELOW：默认情况下，efence检测是高地址越界问题，若将此值设置为1，则表示检测内存低地址越界问题。</li>
+<li>EF_PROTECT_FREE：使能use after free检测。</li>
+<li>EF_ALLOW_MALLOC_0：是否检查malloc(0)行为</li>
+<li>EF_FREE_WIPES：free内存后，是否对该区域填充0xbd<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * initialize sets up the memory allocation arena and the run-time</span></span><br><span class="line"><span class="comment"> * configuration information.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span></span><br><span class="line">initialize(<span class="keyword">void</span>)</span><br><span class="line">&#123;</span><br><span class="line">        <span class="comment">/* 功能说明和配置 */</span></span><br><span class="line">       <span class="keyword">if</span> ( EF_DISABLE_BANNER == <span class="number">-1</span> ) &#123;</span><br><span class="line">               <span class="keyword">if</span> ( (<span class="built_in">string</span> = getenv(<span class="string">"EF_DISABLE_BANNER"</span>)) != <span class="number">0</span> )</span><br><span class="line">                       EF_DISABLE_BANNER = atoi(<span class="built_in">string</span>);</span><br><span class="line">               <span class="keyword">else</span></span><br><span class="line">                       EF_DISABLE_BANNER = <span class="number">0</span>;</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">if</span> ( EF_DISABLE_BANNER == <span class="number">0</span> )</span><br><span class="line">               EF_Print(version); <span class="comment">// 打印efence库版本信息</span></span><br><span class="line"></span><br><span class="line"> <span class="comment">/*</span></span><br><span class="line"><span class="comment">  * Import the user's environment specification of the default</span></span><br><span class="line"><span class="comment">  * alignment for malloc(). We want that alignment to be under</span></span><br><span class="line"><span class="comment">  * user control, since smaller alignment lets us catch more bugs,</span></span><br><span class="line"><span class="comment">  * however some software will break if malloc() returns a buffer</span></span><br><span class="line"><span class="comment">  * that is not word-aligned.</span></span><br><span class="line"><span class="comment">  *</span></span><br><span class="line"><span class="comment">  * I would like</span></span><br><span class="line"><span class="comment">  * alignment to be zero so that we could catch all one-byte</span></span><br><span class="line"><span class="comment">  * overruns, however if malloc() is asked to allocate an odd-size</span></span><br><span class="line"><span class="comment">  * buffer and returns an address that is not word-aligned, or whose</span></span><br><span class="line"><span class="comment">  * size is not a multiple of the word size, software breaks.</span></span><br><span class="line"><span class="comment">  * This was the case with the Sun string-handling routines,</span></span><br><span class="line"><span class="comment">  * which can do word fetches up to three bytes beyond the end of a</span></span><br><span class="line"><span class="comment">  * string. I handle this problem in part by providing</span></span><br><span class="line"><span class="comment">  * byte-reference-only versions of the string library functions, but</span></span><br><span class="line"><span class="comment">  * there are other functions that break, too. Some in X Windows, one</span></span><br><span class="line"><span class="comment">  * in Sam Leffler's TIFF library, and doubtless many others.</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * 内存对齐配置： 如上面英文注释介绍，这里配置的是malloc的内存对齐颗粒度，</span></span><br><span class="line"><span class="comment">     * 原理上，取值越小能够捕捉到更多非法访问行为，但也会导致malloc返回的</span></span><br><span class="line"><span class="comment">     * 内存地址不是字对齐的，会导致部分软件运行异常。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line"> <span class="keyword">if</span> ( EF_ALIGNMENT == <span class="number">-1</span> ) &#123;</span><br><span class="line">  <span class="keyword">if</span> ( (<span class="built_in">string</span> = getenv(<span class="string">"EF_ALIGNMENT"</span>)) != <span class="number">0</span> )</span><br><span class="line">   EF_ALIGNMENT = (<span class="keyword">size_t</span>)atoi(<span class="built_in">string</span>);</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">   EF_ALIGNMENT = <span class="keyword">sizeof</span>(<span class="keyword">int</span>);</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line"> <span class="comment">/*</span></span><br><span class="line"><span class="comment">  * See if the user wants to protect the address space below a buffer,</span></span><br><span class="line"><span class="comment">  * rather than that above a buffer.</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * 保护buffer的高地址还是低地址的选项开关，即检测内存低地址越界，还是高地址越界问题 </span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line"> <span class="keyword">if</span> ( EF_PROTECT_BELOW == <span class="number">-1</span> ) &#123;</span><br><span class="line">  <span class="keyword">if</span> ( (<span class="built_in">string</span> = getenv(<span class="string">"EF_PROTECT_BELOW"</span>)) != <span class="number">0</span> )</span><br><span class="line">   EF_PROTECT_BELOW = (atoi(<span class="built_in">string</span>) != <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">   EF_PROTECT_BELOW = <span class="number">0</span>;</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line"> <span class="comment">/*</span></span><br><span class="line"><span class="comment">  * See if the user wants to protect memory that has been freed until</span></span><br><span class="line"><span class="comment">  * the program exits, rather than until it is re-allocated.</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * use after free检测功能开关</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line"> <span class="keyword">if</span> ( EF_PROTECT_FREE == <span class="number">-1</span> ) &#123;</span><br><span class="line">  <span class="keyword">if</span> ( (<span class="built_in">string</span> = getenv(<span class="string">"EF_PROTECT_FREE"</span>)) != <span class="number">0</span> )</span><br><span class="line">   EF_PROTECT_FREE = (atoi(<span class="built_in">string</span>) != <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">   EF_PROTECT_FREE = <span class="number">0</span>;</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line"> <span class="comment">/*</span></span><br><span class="line"><span class="comment">  * See if the user wants to allow malloc(0).</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"> <span class="keyword">if</span> ( EF_ALLOW_MALLOC_0 == <span class="number">-1</span> ) &#123;</span><br><span class="line">  <span class="keyword">if</span> ( (<span class="built_in">string</span> = getenv(<span class="string">"EF_ALLOW_MALLOC_0"</span>)) != <span class="number">0</span> )</span><br><span class="line">   EF_ALLOW_MALLOC_0 = (atoi(<span class="built_in">string</span>) != <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">   EF_ALLOW_MALLOC_0 = <span class="number">0</span>;</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line"> <span class="comment">/*</span></span><br><span class="line"><span class="comment">  * See if the user wants us to wipe out freed memory.</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"> <span class="keyword">if</span> ( EF_FREE_WIPES == <span class="number">-1</span> ) &#123;</span><br><span class="line">         <span class="keyword">if</span> ( (<span class="built_in">string</span> = getenv(<span class="string">"EF_FREE_WIPES"</span>)) != <span class="number">0</span> )</span><br><span class="line">                 EF_FREE_WIPES = (atoi(<span class="built_in">string</span>) != <span class="number">0</span>);</span><br><span class="line">         <span class="keyword">else</span></span><br><span class="line">                 EF_FREE_WIPES = <span class="number">0</span>;</span><br><span class="line"> &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* 内存申请和初始化操作，具体见下节分析 */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h4 id="Initialize的内存操作部分"><a href="#Initialize的内存操作部分" class="headerlink" title="Initialize的内存操作部分"></a>Initialize的内存操作部分</h4><pre><code>Initialize的内存操作主要实现流程如下：
+</code></pre><ol>
+<li>第一次申请内存时，通过mmap向操作系统申请不少于MEMORY_CREATION_SIZE字节内存，code中设定为1MB，该值实际会自动向上取最小满足页对齐的大小。</li>
+<li>申请到的内存第一页用于存放slot结构体数组。slot用于管理被分配的各个内存单元信息,如返回给用户的实际地址、内部实际地址、大小等，具体如下。</li>
+<li>slot[0]用于存放slot结构体数组起始地址和当前数组大小的信息。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> _<span class="title">Slot</span> &#123;</span></span><br><span class="line"> <span class="keyword">void</span> *	userAddress; <span class="comment">// 返回给用户的实际地址</span></span><br><span class="line"> <span class="keyword">void</span> *	internalAddress; <span class="comment">// 实际内存区起始地址</span></span><br><span class="line"> <span class="keyword">size_t</span>	userSize; <span class="comment">// 用户申请的大小</span></span><br><span class="line"> <span class="keyword">size_t</span>	internalSize; <span class="comment">// 内部实际申请的大小</span></span><br><span class="line"> Mode	mode; <span class="comment">// 节点对应的模式，具体如下</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">enum</span> _Mode &#123;</span><br><span class="line"> NOT_IN_USE = <span class="number">0</span>,	<span class="comment">/* Available to represent a malloc buffer. */</span></span><br><span class="line"> FREE,	<span class="comment">/* A free buffer. */</span></span><br><span class="line"> ALLOCATED,	<span class="comment">/* A buffer that is in use. */</span></span><br><span class="line"> PROTECTED,	<span class="comment">/* A freed buffer that can not be allocated again. */</span></span><br><span class="line"> INTERNAL_USE	<span class="comment">/* A buffer used internally by malloc(). */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<p>​<br>代码解析如下<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">size_t</span>  size = MEMORY_CREATION_SIZE; <span class="comment">//  MEMORY_CREATION_SIZE = 1024*1024;</span></span><br><span class="line">    </span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Get the run-time configuration of the virtual memory page size.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">    <span class="comment">// 获取当前虚拟内存页大小</span></span><br><span class="line">bytesPerPage = Page_Size(); </span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Figure out how many Slot structures to allocate at one time.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">    <span class="comment">// 计算一个页可以存储多少个slot结构</span></span><br><span class="line">slotCount = slotsPerPage = bytesPerPage / <span class="keyword">sizeof</span>(Slot); </span><br><span class="line">allocationListSize = bytesPerPage;</span><br><span class="line"><span class="keyword">if</span> ( allocationListSize &gt; size )</span><br><span class="line">    size = allocationListSize; <span class="comment">// 若页大于1M，则申请内存的大小扩展为页大小</span></span><br><span class="line"><span class="keyword">if</span> ( (slack = size % bytesPerPage) != <span class="number">0</span> )</span><br><span class="line">    size += bytesPerPage - slack;  <span class="comment">// 将申请的内存以页大小对齐</span></span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Allocate memory, and break it up into two malloc buffers. The</span></span><br><span class="line"><span class="comment"> * first buffer will be used for Slot structures, the second will</span></span><br><span class="line"><span class="comment"> * be marked free.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">    <span class="comment">// 通过mmap创建N * bytesPerPage大小的内存</span></span><br><span class="line">slot = allocationList = (Slot *)Page_Create(size); </span><br><span class="line"><span class="built_in">memset</span>((<span class="keyword">char</span> *)allocationList, <span class="number">0</span>, allocationListSize);</span><br><span class="line">    <span class="comment">// 申请的内存第一页用于存放slot结构数组，这一页的信息记录于slot[0]</span></span><br><span class="line">    <span class="comment">// eFence中allocateMoreSlots没有更新这个结构体的信息，算是个bug吧？</span></span><br><span class="line">slot[<span class="number">0</span>].internalSize = slot[<span class="number">0</span>].userSize = allocationListSize;</span><br><span class="line">slot[<span class="number">0</span>].internalAddress = slot[<span class="number">0</span>].userAddress = allocationList;</span><br><span class="line">slot[<span class="number">0</span>].mode = INTERNAL_USE;</span><br><span class="line">    <span class="comment">// 当申请size大于一页，则剩余部分作为用户内存预留下来。</span></span><br><span class="line"><span class="keyword">if</span> ( size &gt; allocationListSize ) &#123;</span><br><span class="line">    slot[<span class="number">1</span>].internalAddress = slot[<span class="number">1</span>].userAddress</span><br><span class="line">     = ((<span class="keyword">char</span> *)slot[<span class="number">0</span>].internalAddress) + slot[<span class="number">0</span>].internalSize;</span><br><span class="line">    slot[<span class="number">1</span>].internalSize</span><br><span class="line">     = slot[<span class="number">1</span>].userSize = size - slot[<span class="number">0</span>].internalSize;</span><br><span class="line">    slot[<span class="number">1</span>].mode = FREE;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Deny access to the free page, so that we will detect any software</span></span><br><span class="line"><span class="comment"> * that treads upon free memory.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"> <span class="comment">// mprotect将刚申请的内存部分设置为PROT_NONE，防止非法读写行为</span></span><br><span class="line">     <span class="comment">// 实际，slot[0]对应的那块内存也要保护的，但没有，暂未发现会导致什么问题。</span></span><br><span class="line">Page_DenyAccess(slot[<span class="number">1</span>].internalAddress, slot[<span class="number">1</span>].internalSize);</span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Account for the two slot structures that we've used.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">    <span class="comment">// 消耗了两个slot，因此计数计数减一，efence中Hardcode了当unUsedSlots &lt; 7时</span></span><br><span class="line">    <span class="comment">// 需要重新在这个基础上申请多一个页来存放新的slot</span></span><br><span class="line">unUsedSlots = slotCount - <span class="number">2</span>;</span><br></pre></td></tr></table></figure></p>
+<h3 id="memalign-实现-–-allocator核心"><a href="#memalign-实现-–-allocator核心" class="headerlink" title=" memalign 实现 – allocator核心 "></a><span id="allocator-realization"> memalign 实现 – allocator核心 </span></h3><p>　　memalign是整个efence的核心部分，所申请的内存块都是以页为单位（受限于mprotect），其取值为最小满足用户申请的内存大小的页数再加一，多加的这一页就是eFence工作的根本。如下以用户申请的内存小于一页为例，memalign实际申请了两页</p>
+<ol>
+<li>EF_PROTECT_BELOW为0，查高地址越界访问时，allocator会设置PAGE 1为PROT_NONE，然后Page 1的起始地址addr - sizeof(Variables)即为返回的地址。</li>
+<li>EF_PROTECT_BELOW非0，查低地址越界访问时，page 0会被设置为PROT_NONE，Page 1起始地址为返回地址。</li>
+<li>当出现内存越界访问时，就会对PROTECTED区域进行读写，导致页错误而coredump，这也就是efence实现的原理了。<img src="/2018/11/15/efence/efence.png" title="realization of efence">
+　　当内存大小大于一个页时原理也同上。memalign函数的具体实现分为下面几步</li>
+<li>对用户申请大小的预处理。检查是否malloc(0)-&gt;按函参alignment大小对齐-&gt;增加1个页的大小，然后取最小满足该内存大小的最小页数（即internalSize）</li>
+<li>查询空闲的slot用于记录本次申请。如果当前空闲的slot数小于7，申请一块大slot数组一个页的内存，扩展slot数组。</li>
+<li>内存分配，从slot数组FREE的记录中查找满足internalSize的内存，最终可分为如下三种case：<br>1） 刚好有一块大小满足internalSize的内存，直接使用；<br>2） 有不少于一块大于申请大小的内存。选取最小的一块，将这块内存分割为两部分，一部分作为结果返回给用户，剩余部分用一个NOT_IN_USE的slot记录供下次申请；<br>3） 所有记录都小于申请的大小。重新申请一块不小于1M且页对齐的内存，并用一个空闲的slot（NOT_IN_USE）记录下来，然后执行第2个case的操作。<br>显然，在大量申请小内存的场景中，efence如果没有及时释放申请的内存，内存将会严重碎片化。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * This is the memory allocator. When asked to allocate a buffer, allocate</span></span><br><span class="line"><span class="comment"> * it in such a way that the end of the buffer is followed by an inaccessable</span></span><br><span class="line"><span class="comment"> * memory page. If software overruns that buffer, it will touch the bad page</span></span><br><span class="line"><span class="comment"> * and get an immediate segmentation fault. It's then easy to zero in on the</span></span><br><span class="line"><span class="comment"> * offending code with a debugger.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * There are a few complications. If the user asks for an odd-sized buffer,</span></span><br><span class="line"><span class="comment"> * we would have to have that buffer start on an odd address if the byte after</span></span><br><span class="line"><span class="comment"> * the end of the buffer was to be on the inaccessable page. Unfortunately,</span></span><br><span class="line"><span class="comment"> * there is lots of software that asks for odd-sized buffers and then</span></span><br><span class="line"><span class="comment"> * requires that the returned address be word-aligned, or the size of the</span></span><br><span class="line"><span class="comment"> * buffer be a multiple of the word size. An example are the string-processing</span></span><br><span class="line"><span class="comment"> * functions on Sun systems, which do word references to the string memory</span></span><br><span class="line"><span class="comment"> * and may refer to memory up to three bytes beyond the end of the string.</span></span><br><span class="line"><span class="comment"> * For this reason, I take the alignment requests to memalign() and valloc()</span></span><br><span class="line"><span class="comment"> * seriously, and</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * Electric Fence wastes lots of memory. I do a best-fit allocator here</span></span><br><span class="line"><span class="comment"> * so that it won't waste even more. It's slow, but thrashing because your</span></span><br><span class="line"><span class="comment"> * working set is too big for a system's RAM is even slower.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">extern</span> C_LINKAGE <span class="keyword">void</span> *</span><br><span class="line">memalign(<span class="keyword">size_t</span> alignment, <span class="keyword">size_t</span> userSize)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">register</span> Slot * slot;</span><br><span class="line">    <span class="keyword">register</span> <span class="keyword">size_t</span> count;</span><br><span class="line">    Slot *      fullSlot = <span class="number">0</span>;</span><br><span class="line">    Slot *      emptySlots[<span class="number">2</span>];</span><br><span class="line">    <span class="keyword">size_t</span>      internalSize;</span><br><span class="line">    <span class="keyword">size_t</span>      slack;</span><br><span class="line">    <span class="keyword">char</span> *      address;</span><br><span class="line">    <span class="keyword">if</span> ( allocationList == <span class="number">0</span> )</span><br><span class="line">        initialize();</span><br><span class="line">    <span class="comment">// EF_ALLOW_MALLOC_0为0时开启malloc(0)检查</span></span><br><span class="line">    <span class="keyword">if</span> ( userSize == <span class="number">0</span> &amp;&amp; !EF_ALLOW_MALLOC_0 )</span><br><span class="line">        EF_Abort(<span class="string">"Allocating 0 bytes, probably a bug."</span>);</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * If EF_PROTECT_BELOW is set, all addresses returned by malloc()</span></span><br><span class="line"><span class="comment">     * and company will be page-aligned.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">// 如果未开启低地址越界保护，则需要做内存对齐</span></span><br><span class="line">    <span class="keyword">if</span> ( !EF_PROTECT_BELOW &amp;&amp; alignment &gt; <span class="number">1</span> ) &#123;</span><br><span class="line">        <span class="keyword">if</span> ( (slack = userSize % alignment) != <span class="number">0</span> )</span><br><span class="line">            userSize += alignment - slack;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * The internal size of the buffer is rounded up to the next page-size</span></span><br><span class="line"><span class="comment">     * boudary, and then we add another page's worth of memory for the</span></span><br><span class="line"><span class="comment">     * dead page.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">// 将用户申请的大小调整到如下数量的页</span></span><br><span class="line">    <span class="comment">// (userSize / bytesPerPage) + (int)(userSize % bytesPerPage != 0) 页</span></span><br><span class="line">    internalSize = userSize + bytesPerPage;</span><br><span class="line">    <span class="keyword">if</span> ( (slack = internalSize % bytesPerPage) != <span class="number">0</span> )</span><br><span class="line">        internalSize += bytesPerPage - slack;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * These will hold the addresses of two empty Slot structures, that</span></span><br><span class="line"><span class="comment">     * can be used to hold information for any memory I create, and any</span></span><br><span class="line"><span class="comment">     * memory that I mark free.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">// 准备记录两个NOT_IN_USE的slot，主要应对上面提及的case 2和case 3</span></span><br><span class="line">    <span class="comment">// case 2：emptySlots[0]记录分配给用户后，剩余的那块内存（FREE）。</span></span><br><span class="line">    <span class="comment">// case 3: emptySlots[0]记录新申请的内存，emptySlots[1]执行case 2中的功能</span></span><br><span class="line">    emptySlots[<span class="number">0</span>] = <span class="number">0</span>;</span><br><span class="line">    emptySlots[<span class="number">1</span>] = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * The internal memory used by the allocator is currently</span></span><br><span class="line"><span class="comment">     * inaccessable, so that errant programs won't scrawl on the</span></span><br><span class="line"><span class="comment">     * allocator's arena. I'll un-protect it here so that I can make</span></span><br><span class="line"><span class="comment">     * a new allocation. I'll re-protect it before I return.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( !noAllocationListProtection )</span><br><span class="line">        Page_AllowAccess(allocationList, allocationListSize);</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * If I'm running out of empty slots, create some more before</span></span><br><span class="line"><span class="comment">     * I don't have enough slots left to make an allocation.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">/* 如果当前未使用的slot少于7个，则需要申请多一个页来扩展slot数组以满足后续</span></span><br><span class="line"><span class="comment">     * 使用，internalUse是用来防重入的，因memalign -&gt; allocateMoreSlots-&gt;</span></span><br><span class="line"><span class="comment">     * internalUse = 1; -&gt; malloc -&gt; memalign，如果不做这判断就会重入爆栈。</span></span><br><span class="line"><span class="comment">     * 这里通过malloc来做会占用多一个页，造成浪费，这也就有一个优化点。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> ( !internalUse &amp;&amp; unUsedSlots &lt; <span class="number">7</span> ) &#123;</span><br><span class="line">        allocateMoreSlots();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Iterate through all of the slot structures. Attempt to find a slot</span></span><br><span class="line"><span class="comment">     * containing free memory of the exact right size. Accept a slot with</span></span><br><span class="line"><span class="comment">     * more memory than we want, if the exact right size is not available.</span></span><br><span class="line"><span class="comment">     * Find two slot structures that are not in use. We will need one if</span></span><br><span class="line"><span class="comment">     * we split a buffer into free and allocated parts, and the second if</span></span><br><span class="line"><span class="comment">     * we have to create new memory and mark it as free.</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">/* 遍历slot数组，查找FREE slot中是否有一块不小于所需的内存，循环的终止条件为</span></span><br><span class="line"><span class="comment">     * 1) 找到恰好满足所需大小内存的FREE slot和一个NOT_IN_USE slot；</span></span><br><span class="line"><span class="comment">     * 2) 找不到恰好满足的大小，但找到两个NOT_IN_USE的slot</span></span><br><span class="line"><span class="comment">     * 满足一个即可。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">for</span> ( slot = allocationList, count = slotCount ; count &gt; <span class="number">0</span>; count-- ) &#123;</span><br><span class="line">        <span class="keyword">if</span> ( slot-&gt;mode == FREE</span><br><span class="line">         &amp;&amp; slot-&gt;internalSize &gt;= internalSize ) &#123;</span><br><span class="line">            <span class="keyword">if</span> ( !fullSlot</span><br><span class="line">             ||slot-&gt;internalSize &lt; fullSlot-&gt;internalSize)&#123;</span><br><span class="line">                fullSlot = slot;</span><br><span class="line">                <span class="keyword">if</span> ( slot-&gt;internalSize == internalSize</span><br><span class="line">                 &amp;&amp; emptySlots[<span class="number">0</span>] )</span><br><span class="line">                    <span class="keyword">break</span>;  <span class="comment">/* All done, */</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> ( slot-&gt;mode == NOT_IN_USE ) &#123;</span><br><span class="line">            <span class="keyword">if</span> ( !emptySlots[<span class="number">0</span>] )</span><br><span class="line">                emptySlots[<span class="number">0</span>] = slot;</span><br><span class="line">            <span class="keyword">else</span> <span class="keyword">if</span> ( !emptySlots[<span class="number">1</span>] )</span><br><span class="line">                emptySlots[<span class="number">1</span>] = slot;</span><br><span class="line">            <span class="keyword">else</span> <span class="keyword">if</span> ( fullSlot</span><br><span class="line">             &amp;&amp; fullSlot-&gt;internalSize == internalSize )</span><br><span class="line">                <span class="keyword">break</span>;  <span class="comment">/* All done. */</span></span><br><span class="line">        &#125;</span><br><span class="line">        slot++;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> ( !emptySlots[<span class="number">0</span>] )</span><br><span class="line">        internalError();</span><br><span class="line">    <span class="comment">/* </span></span><br><span class="line"><span class="comment">     * 如果通过第2个条件退出循环，且没找到一个不小于申请所需大小的内存，</span></span><br><span class="line"><span class="comment">     * 则申请一块不小于1M大小的内存，使用emptySlots[0]记录该buffer信息，</span></span><br><span class="line"><span class="comment">     * 然后将emptySlots[0]指向emptySlots[1]，供后续使用</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( !fullSlot ) &#123;</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * I get here if I haven't been able to find a free buffer</span></span><br><span class="line"><span class="comment">         * with all of the memory I need. I'll have to create more</span></span><br><span class="line"><span class="comment">         * memory. I'll mark it all as free, and then split it into</span></span><br><span class="line"><span class="comment">         * free and allocated portions later.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">size_t</span>  chunkSize = MEMORY_CREATION_SIZE;</span><br><span class="line">        <span class="keyword">if</span> ( !emptySlots[<span class="number">1</span>] )</span><br><span class="line">            internalError();</span><br><span class="line">        <span class="keyword">if</span> ( chunkSize &lt; internalSize )</span><br><span class="line">            chunkSize = internalSize;</span><br><span class="line">        <span class="keyword">if</span> ( (slack = chunkSize % bytesPerPage) != <span class="number">0</span> )</span><br><span class="line">            chunkSize += bytesPerPage - slack;</span><br><span class="line">        <span class="comment">/* Use up one of the empty slots to make the full slot. */</span></span><br><span class="line">        fullSlot = emptySlots[<span class="number">0</span>];</span><br><span class="line">        emptySlots[<span class="number">0</span>] = emptySlots[<span class="number">1</span>];</span><br><span class="line">        fullSlot-&gt;internalAddress = Page_Create(chunkSize);</span><br><span class="line">        fullSlot-&gt;internalSize = chunkSize;</span><br><span class="line">        fullSlot-&gt;mode = FREE;</span><br><span class="line">        unUsedSlots--;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * If I'm allocating memory for the allocator's own data structures,</span></span><br><span class="line"><span class="comment">     * mark it INTERNAL_USE so that no errant software will be able to</span></span><br><span class="line"><span class="comment">     * free it.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( internalUse )</span><br><span class="line">        fullSlot-&gt;mode = INTERNAL_USE;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        fullSlot-&gt;mode = ALLOCATED;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * If the buffer I've found is larger than I need, split it into</span></span><br><span class="line"><span class="comment">     * an allocated buffer with the exact amount of memory I need, and</span></span><br><span class="line"><span class="comment">     * a free buffer containing the surplus memory.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * 检查如上获取到的内存大小是否大于所需，若大于所需，则通过emptySlots[0]</span></span><br><span class="line"><span class="comment">     * 将多余部分记录下来，供下次申请使用，这个也是作者避免内存浪费的一个优化。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( fullSlot-&gt;internalSize &gt; internalSize ) &#123;</span><br><span class="line">        emptySlots[<span class="number">0</span>]-&gt;internalSize</span><br><span class="line">         = fullSlot-&gt;internalSize - internalSize;</span><br><span class="line">        emptySlots[<span class="number">0</span>]-&gt;internalAddress</span><br><span class="line">         = ((<span class="keyword">char</span> *)fullSlot-&gt;internalAddress) + internalSize;</span><br><span class="line">        emptySlots[<span class="number">0</span>]-&gt;mode = FREE;</span><br><span class="line">        fullSlot-&gt;internalSize = internalSize;</span><br><span class="line">        unUsedSlots--;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 实现保护的算法部分，也就是文字说明画的那个图，下面我也会给个文字图。</span></span><br><span class="line">    <span class="keyword">if</span> ( !EF_PROTECT_BELOW ) &#123;</span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * Arrange the buffer so that it is followed by an inaccessable</span></span><br><span class="line"><span class="comment">         * memory page. A buffer overrun that touches that page will</span></span><br><span class="line"><span class="comment">         * cause a segmentation fault.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">       <span class="comment">/* 算法实现如下内存分布。当内存往高地址越界时，就会触发页错误导致coredump，</span></span><br><span class="line"><span class="comment">          也可见，用户申请的内存（MemForUser）越小，内存浪费越严重。</span></span><br><span class="line"><span class="comment">      low      +---------------+-----------------+</span></span><br><span class="line"><span class="comment">       |       |   WastedMem   |                 |</span></span><br><span class="line"><span class="comment">       |       +---------------+       page1     |</span></span><br><span class="line"><span class="comment">       |       |   MemForUser  |                 |</span></span><br><span class="line"><span class="comment">       |       +---------------+-----------------+</span></span><br><span class="line"><span class="comment">       |       |   PROT_NONE   |       page2     |</span></span><br><span class="line"><span class="comment">      high     +---------------+-----------------+</span></span><br><span class="line"><span class="comment">       */</span></span><br><span class="line">        address = (<span class="keyword">char</span> *)fullSlot-&gt;internalAddress;</span><br><span class="line">        <span class="comment">/* Set up the "live" page. */</span> <span class="comment">// page1 部分使能读写</span></span><br><span class="line">        <span class="keyword">if</span> ( internalSize - bytesPerPage &gt; <span class="number">0</span> )</span><br><span class="line">                Page_AllowAccess(</span><br><span class="line">                 fullSlot-&gt;internalAddress</span><br><span class="line">                ,internalSize - bytesPerPage);</span><br><span class="line">        address += internalSize - bytesPerPage;</span><br><span class="line">        <span class="comment">/* Set up the "dead" page. */</span> <span class="comment">// page2 禁止访写</span></span><br><span class="line">        Page_DenyAccess(address, bytesPerPage);</span><br><span class="line">        <span class="comment">/* Figure out what address to give the user. */</span></span><br><span class="line">        address -= userSize;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span> &#123;  <span class="comment">/* EF_PROTECT_BELOW != 0 */</span></span><br><span class="line">        <span class="comment">/*</span></span><br><span class="line"><span class="comment">         * Arrange the buffer so that it is preceded by an inaccessable</span></span><br><span class="line"><span class="comment">         * memory page. A buffer underrun that touches that page will</span></span><br><span class="line"><span class="comment">         * cause a segmentation fault.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">       <span class="comment">/* 内存往低地址写的时候，会触及PROT_NONE部分内存，导致页错误，引发coredump</span></span><br><span class="line"><span class="comment">      low      +---------------+-----------------+</span></span><br><span class="line"><span class="comment">       |       |   PROT_NONE   |      page2      |</span></span><br><span class="line"><span class="comment">       |       +---------------+-----------------+</span></span><br><span class="line"><span class="comment">       |       |   MemForUser  |                 |</span></span><br><span class="line"><span class="comment">       |       +---------------+      page1      |</span></span><br><span class="line"><span class="comment">       |       |   WastedMem   |                 |</span></span><br><span class="line"><span class="comment">      high     +---------------+-----------------+</span></span><br><span class="line"><span class="comment">       */</span></span><br><span class="line">        address = (<span class="keyword">char</span> *)fullSlot-&gt;internalAddress;</span><br><span class="line">        <span class="comment">/* Set up the "dead" page. */</span></span><br><span class="line">        Page_DenyAccess(address, bytesPerPage);</span><br><span class="line">        address += bytesPerPage;</span><br><span class="line">        <span class="comment">/* Set up the "live" page. */</span></span><br><span class="line">        <span class="keyword">if</span> ( internalSize - bytesPerPage &gt; <span class="number">0</span> )</span><br><span class="line">            Page_AllowAccess(address, internalSize - bytesPerPage);</span><br><span class="line">    &#125;</span><br><span class="line">    fullSlot-&gt;userAddress = address;</span><br><span class="line">    fullSlot-&gt;userSize = userSize;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Make the pool's internal memory inaccessable, so that the program</span></span><br><span class="line"><span class="comment">     * being debugged can't stomp on it.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( !internalUse )</span><br><span class="line">        Page_DenyAccess(allocationList, allocationListSize);</span><br><span class="line">    <span class="keyword">return</span> address;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h3 id="free实现-gt-gt-碎片化问题处理"><a href="#free实现-gt-gt-碎片化问题处理" class="headerlink" title="free实现 &gt;&gt; 碎片化问题处理"></a>free实现 &gt;&gt; 碎片化问题处理</h3><p>基本上，通过对memalign的解析，我们大概可以预想free的功能要怎么实现了。</p>
+<ol>
+<li>如果开启EF_PROTECT_FREE，也就是UAF检测，则将slot-&gt;mode = PROTECTED，不再被使用，否则设置为FREE供后续使用</li>
+<li>如果开启EF_FREE_WIPES，也就是poison memory的话，则将对应内存memset为0xbd</li>
+<li>将free的内存区域mprotect为PROT_NONE<br>然后我没想到的是上面提及的内存碎片化，作者在这里做了处理，即在free时候尝试合并前后同类块以降低碎片化，不过看起来有bug。<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">extern</span> C_LINKAGE <span class="keyword">void</span> <span class="title">free</span><span class="params">(<span class="keyword">void</span> * address)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Slot *  slot;</span><br><span class="line">    Slot *  previousSlot = <span class="number">0</span>;</span><br><span class="line">    Slot *  nextSlot = <span class="number">0</span>;</span><br><span class="line">    lock();</span><br><span class="line">    <span class="keyword">if</span> ( address == <span class="number">0</span> ) &#123;</span><br><span class="line">        unlock();</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> ( allocationList == <span class="number">0</span> )</span><br><span class="line">        EF_Abort(<span class="string">"free() called before first malloc()."</span>);</span><br><span class="line">    <span class="keyword">if</span> ( !noAllocationListProtection )</span><br><span class="line">        Page_AllowAccess(allocationList, allocationListSize);</span><br><span class="line">    <span class="comment">// 查找对应地址的所在slot</span></span><br><span class="line">    slot = slotForUserAddress(address);</span><br><span class="line">    <span class="keyword">if</span> ( !slot )</span><br><span class="line">        EF_Abort(<span class="string">"free(%a): address not from malloc()."</span>, address);</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     *  1) 如果是internalUse == 1，即allocateMoreSlots() -&gt; free()，则正常释放，</span></span><br><span class="line"><span class="comment">     *  不abort退出，如果internalUse == 0，且为INTERNAL_USE内存，说明有非法尝试</span></span><br><span class="line"><span class="comment">     *  释放库内部地址，此时应abort退出。</span></span><br><span class="line"><span class="comment">     *  2) 如果是非INTERNAL_USE且不为ALLOCATED则是double free，因为PROTECTED/FREE</span></span><br><span class="line"><span class="comment">     *  都是free后标记的。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( slot-&gt;mode != ALLOCATED ) &#123;</span><br><span class="line">        <span class="keyword">if</span> ( internalUse &amp;&amp; slot-&gt;mode == INTERNAL_USE )</span><br><span class="line">            <span class="comment">/* Do nothing. */</span>;</span><br><span class="line">        <span class="keyword">else</span> &#123;</span><br><span class="line">            EF_Abort(</span><br><span class="line">             <span class="string">"free(%a): freeing free memory."</span></span><br><span class="line">            ,address);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> ( EF_PROTECT_FREE )</span><br><span class="line">        slot-&gt;mode = PROTECTED;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        slot-&gt;mode = FREE;</span><br><span class="line">    <span class="keyword">if</span> ( EF_FREE_WIPES )</span><br><span class="line">      <span class="built_in">memset</span>(slot-&gt;userAddress, <span class="number">0xbd</span>, slot-&gt;userSize);</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     *  这里是作者为降低内存碎片化做的努力。分别查找当前slot内存块前后的内存</span></span><br><span class="line"><span class="comment">     *  是否在记录内，如果存在且为PROTECT或FREE的内存，将slot对应内存合并，</span></span><br><span class="line"><span class="comment">     *  并释放其中一个slot结构体。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    previousSlot = slotForInternalAddressPreviousTo(slot-&gt;internalAddress);</span><br><span class="line">    nextSlot = slotForInternalAddress(</span><br><span class="line">     ((<span class="keyword">char</span> *)slot-&gt;internalAddress) + slot-&gt;internalSize);</span><br><span class="line">    <span class="comment">/* </span></span><br><span class="line"><span class="comment">     * bug case: 如果mmap多次分配内存的地址是连续的，即previousSlot/nextSlot</span></span><br><span class="line"><span class="comment">     * 地址刚好与当前slot地址连续，但他们是FREE的，而当前slot的是PROTECTED的，</span></span><br><span class="line"><span class="comment">     * 那会导致未使用的内存被污染了。</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> ( previousSlot</span><br><span class="line">     &amp;&amp; (previousSlot-&gt;mode == FREE || previousSlot-&gt;mode == PROTECTED) ) &#123;</span><br><span class="line">        <span class="comment">/* Coalesce previous slot with this one. */</span></span><br><span class="line">        previousSlot-&gt;internalSize += slot-&gt;internalSize;</span><br><span class="line">        <span class="keyword">if</span> ( EF_PROTECT_FREE )</span><br><span class="line">            previousSlot-&gt;mode = PROTECTED;</span><br><span class="line">        slot-&gt;internalAddress = slot-&gt;userAddress = <span class="number">0</span>;</span><br><span class="line">        slot-&gt;internalSize = slot-&gt;userSize = <span class="number">0</span>;</span><br><span class="line">        slot-&gt;mode = NOT_IN_USE;</span><br><span class="line">        slot = previousSlot;</span><br><span class="line">        unUsedSlots++;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> ( nextSlot</span><br><span class="line">     &amp;&amp; (nextSlot-&gt;mode == FREE || nextSlot-&gt;mode == PROTECTED) ) &#123;</span><br><span class="line">        <span class="comment">/* Coalesce next slot with this one. */</span></span><br><span class="line">        slot-&gt;internalSize += nextSlot-&gt;internalSize;</span><br><span class="line">        nextSlot-&gt;internalAddress = nextSlot-&gt;userAddress = <span class="number">0</span>;</span><br><span class="line">        nextSlot-&gt;internalSize = nextSlot-&gt;userSize = <span class="number">0</span>;</span><br><span class="line">        nextSlot-&gt;mode = NOT_IN_USE;</span><br><span class="line">        unUsedSlots++;</span><br><span class="line">    &#125;</span><br><span class="line">    slot-&gt;userAddress = slot-&gt;internalAddress;</span><br><span class="line">    slot-&gt;userSize = slot-&gt;internalSize;</span><br><span class="line">    <span class="comment">/*</span></span><br><span class="line"><span class="comment">     * Free memory is _always_ set to deny access. When EF_PROTECT_FREE</span></span><br><span class="line"><span class="comment">     * is true, free memory is never reallocated, so it remains access</span></span><br><span class="line"><span class="comment">     * denied for the life of the process. When EF_PROTECT_FREE is false,</span></span><br><span class="line"><span class="comment">     * the memory may be re-allocated, at which time access to it will be</span></span><br><span class="line"><span class="comment">     * allowed again.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="comment">// 保护FREE和PROTECT的内存，防止越界和UAF</span></span><br><span class="line">    Page_DenyAccess(slot-&gt;internalAddress, slot-&gt;internalSize);</span><br><span class="line">    <span class="keyword">if</span> ( !noAllocationListProtection )</span><br><span class="line">        Page_DenyAccess(allocationList, allocationListSize);</span><br><span class="line">        unlock();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>　　经过如上分析，我们可以发现efence并不是很完善，还有一些优化的空间。另外他也有如下局限性，<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">1</span>、<span class="built_in">malloc</span>和<span class="built_in">free</span>在slot都是线性查找，复杂度为O(n)，性能较低。</span><br><span class="line"><span class="number">2</span>、内存消耗大，特别对于频繁的小内存分配，每次至少申请两个页，内存利用率低。</span><br><span class="line"><span class="number">3</span>、无法对同一块内存同时做上下越界检查。</span><br></pre></td></tr></table></figure></p>
+<p>　　按照我对efence code的理解和解析过程中自己有的疑问，在<a href="https://github.com/CheggEng/electric-fence/tree/master" title="Electric-Fence Githubs" target="_blank" rel="noopener">eFence</a>这版code基础上做自己的修改，如[commit][5]所示，还有待验证，同时我也有想法尝试优化这个实现，一方面是锻炼自己，一方面也是做一个新的挑战，虽然efence跟ASAN确实还是天壤之别的。这次也是因为看到一个团队对tcmalloc客制化实现很好的内存管理控制，也就有想法多了解些开源方案，然后后续遇到类似问题可进行客制化实现，进而提高工作效率。具体参考下面。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">我们团队的同事搞出了一套终极解决方案用于解决各种内存相关问题（例如内存泄漏，内存被踩坏等），很好用。简单来说就一句话修改tcmalloc，加入audit信息。具体修改包括如下<span class="number">2</span>个方面：</span><br><span class="line"><span class="number">1.</span>在每次分配的时候，多申请<span class="number">12</span>个字节，用于记录分配者的线程ID,栈ID,本次操作是分配还是释放的标志位，分配时间等信息。</span><br><span class="line"><span class="number">2.</span>在tcmalloc 上外挂了一个ringbuffer, 每次内存分配的时候记录下地址信息，线程ID,栈ID,长度，申请还是释放标志位</span><br><span class="line">额外占用的内存其实很小。</span><br><span class="line">对于题主说的内存被踩坏的情况，按照我们的经验，大多数都是野指针导致的，遇到后分析core文件，在ringbuffer中查找这个地址的前几代分配释放记录就一目了然了。</span><br><span class="line">——[如何排查大型C程序中的内存写越界导致的coredump？](https:<span class="comment">//www.zhihu.com/question/51735480/answer/127297709)</span></span><br></pre></td></tr></table></figure></p>
+<p>[2]: <a href="https://xsyr.github.io/%E7%BC%96%E7%A8%8B/c/c++/2013/10/13/use-electric-fence-to-detect-heap-overruns-and-underruns.html" target="_blank" rel="noopener">https://xsyr.github.io/%E7%BC%96%E7%A8%8B/c/c++/2013/10/13/use-electric-fence-to-detect-heap-overruns-and-underruns.html</a> 使用efence检测内存泄漏问题<br>[3]: <a href="https://blog.csdn.net/angelbosj/article/details/8272887" target="_blank" rel="noopener">https://blog.csdn.net/angelbosj/article/details/8272887</a> linux 中mmap的用法<br>[4]: <a href="https://linux.die.net/man/3/efence" target="_blank" rel="noopener">https://linux.die.net/man/3/efence</a> efence用法<br>[5]: <a href="https://github.com/Donald-Zhuang/Optimized-Electric-Fence/commit/915636f8b2ceb2c53311e6ea93606a65a8f42fd2?diff=split" target="_blank" rel="noopener">https://github.com/Donald-Zhuang/Optimized-Electric-Fence/commit/915636f8b2ceb2c53311e6ea93606a65a8f42fd2?diff=split</a> my change</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+      <div>
+        <ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者：</strong>
+    Donald.Zhuang
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://donald-zhuang.github.io/2018/11/15/efence/" title="内存异常处理手段总汇 一 -- electric-fence及其源码解析">https://donald-zhuang.github.io/2018/11/15/efence/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>
+    本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" rel="external nofollow" target="_blank">CC BY-NC-SA 3.0</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+
+      </div>
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/gdb/" rel="tag"># gdb</a>
+          
+            <a href="/tags/mprotect/" rel="tag"># mprotect</a>
+          
+            <a href="/tags/efence/" rel="tag"># efence</a>
+          
+            <a href="/tags/内存越界访问/" rel="tag"># 内存越界访问</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/08/11/enlarge-Vision/" rel="next" title="《见识》观后">
+                <i class="fa fa-chevron-left"></i> 《见识》观后
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2018/11/15/GlobalVariableInSoForMultihread/" rel="prev" title="多进程访问共享库全局变量问题简单实例——全局变量被踩debug方法辑录">
+                多进程访问共享库全局变量问题简单实例——全局变量被踩debug方法辑录 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+      <div id="sidebar-dimmer"></div>
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/avatar.gif"
+                alt="Donald.Zhuang" />
+            
+              <p class="site-author-name" itemprop="name">Donald.Zhuang</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">9</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">5</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">14</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/donald-zhuang" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:yukunzhuang@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#LD-PRELOAD和GDB中使用eFence"><span class="nav-number">1.</span> <span class="nav-text">LD_PRELOAD和GDB中使用eFence</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#initialize-配置库运行功能和创建内存索引"><span class="nav-number">2.</span> <span class="nav-text">initialize - 配置库运行功能和创建内存索引</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#功能开关配置"><span class="nav-number">2.1.</span> <span class="nav-text">功能开关配置</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Initialize的内存操作部分"><span class="nav-number">2.2.</span> <span class="nav-text">Initialize的内存操作部分</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#memalign-实现-–-allocator核心"><span class="nav-number">3.</span> <span class="nav-text"> memalign 实现 – allocator核心 </span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#free实现-gt-gt-碎片化问题处理"><span class="nav-number">4.</span> <span class="nav-text">free实现 &gt;&gt; 碎片化问题处理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#总结"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Donald.Zhuang</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+  <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+  <script src="//unpkg.com/valine/dist/Valine.min.js"></script>
+  
+  <script type="text/javascript">
+    var GUEST = ['nick','mail','link'];
+    var guest = 'nick,mail';
+    guest = guest.split(',').filter(item=>{
+      return GUEST.indexOf(item)>-1;
+    });
+    new Valine({
+        el: '#comments' ,
+        verify: false,
+        notify: false,
+        appId: 'sxusj7QM1yscw80QmXrzS7RF-gzGzoHsz',
+        appKey: 'LKGpEcrVf998QJrYCHajJsT8',
+        placeholder: 'Just go go',
+        avatar:'mm',
+        meta:guest,
+        pageSize:'10' || 10,
+        visitor: true,
+    });
+  </script>
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+  <script type="text/javascript" src="/js/src/js.cookie.js?v=5.1.4"></script>
+  <script type="text/javascript" src="/js/src/scroll-cookie.js?v=5.1.4"></script>
+
+
+  
+
+</body>
+</html>
