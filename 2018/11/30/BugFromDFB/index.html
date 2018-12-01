@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion" lang="zh-Hans">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css" />
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="gdb,mprotect,efence,内存越界访问," />
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="御风而行" type="application/atom+xml" />
+
+
+
+
+
+
+<meta name="description" content="本周处理的诸多问题中有两个是串联起来的，都是DFB相关的问题，一个是FD Leak，一个是创建线程没退出，这两个问题的处理过程本不是很复杂，常规手段即可处理，但这次debug过程中，暴露出一些coding上的问题，也是一个提醒。">
+<meta name="keywords" content="gdb,mprotect,efence,内存越界访问">
+<meta property="og:type" content="article">
+<meta property="og:title" content="记一次DFB异常问题处理和思考">
+<meta property="og:url" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/index.html">
+<meta property="og:site_name" content="御风而行">
+<meta property="og:description" content="本周处理的诸多问题中有两个是串联起来的，都是DFB相关的问题，一个是FD Leak，一个是创建线程没退出，这两个问题的处理过程本不是很复杂，常规手段即可处理，但这次debug过程中，暴露出一些coding上的问题，也是一个提醒。">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/exit.png">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/pipe.png">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/strace.png">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/threadLeak.png">
+<meta property="og:image" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/abnormalCheck.png">
+<meta property="og:updated_time" content="2018-12-01T14:40:40.076Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="记一次DFB异常问题处理和思考">
+<meta name="twitter:description" content="本周处理的诸多问题中有两个是串联起来的，都是DFB相关的问题，一个是FD Leak，一个是创建线程没退出，这两个问题的处理过程本不是很复杂，常规手段即可处理，但这次debug过程中，暴露出一些coding上的问题，也是一个提醒。">
+<meta name="twitter:image" content="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/exit.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"always","offset":12,"b2t":false,"scrollpercent":false,"onmobile":true},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/"/>
+
+
+
+
+
+  <title>记一次DFB异常问题处理和思考 | 御风而行</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/"  class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">御风而行</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br />
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br />
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br />
+            
+            归档
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br />
+            
+            关于
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Donald.Zhuang">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="御风而行">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">记一次DFB异常问题处理和思考</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-11-30T06:10:04-08:00">
+                2018-11-30
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/技术整理/" itemprop="url" rel="index">
+                    <span itemprop="name">技术整理</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+                <a href="/2018/11/30/BugFromDFB/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count valine-comment-count" data-xid="/2018/11/30/BugFromDFB/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+             <span id="/2018/11/30/BugFromDFB/" class="leancloud_visitors" data-flag-title="记一次DFB异常问题处理和思考">
+               <span class="post-meta-divider">|</span>
+               <span class="post-meta-item-icon">
+                 <i class="fa fa-eye"></i>
+               </span>
+               
+                 <span class="post-meta-item-text">阅读次数&#58;</span>
+               
+                 <span class="leancloud-visitors-count"></span>
+             </span>
+          
+
+          
+
+          
+            <div class="post-wordcount">
+              
+                
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-file-word-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">字数统计&#58;</span>
+                
+                <span title="字数统计">
+                  2,769 字
+                </span>
+              
+
+              
+                <span class="post-meta-divider">|</span>
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-clock-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">阅读时长 &asymp;</span>
+                
+                <span title="阅读时长">
+                  12 分钟
+                </span>
+              
+            </div>
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>　　本周处理的诸多问题中有两个是串联起来的，都是DFB相关的问题，一个是FD Leak，一个是创建线程没退出，这两个问题的处理过程本不是很复杂，常规手段即可处理，但这次debug过程中，暴露出一些coding上的问题，也是一个提醒。<br><a id="more"></a></p>
+<hr>
+<p>　　这次问题我也初步总结FD leak的常规处理手段，可直接查看<a href="#fd-leak-debug-method">FD leak debug流程</a></p>
+<h3 id="问题处理过程"><a href="#问题处理过程" class="headerlink" title="问题处理过程"></a>问题处理过程</h3><p>　　此次问题环境是HDMI信源下做timming切换压测，每14s一次，timming切换之间会断掉信号然后重送信号，后台有进程在信号变化时截图，压测约5到6小时出现一次异常，产生coredump trace类似如下，当然这个是构造的，避免资安问题。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">#0 0xf0402d5c in raise () from /lib/libc.so.6</span><br><span class="line">(gdb) bt</span><br><span class="line">#0 0xf0402d5c in raise () from /lib/libc.so.6</span><br><span class="line">#1 0xf0406838 in abort () from /lib/libc.so.6</span><br><span class="line">#<span class="number">2</span> <span class="number">0xf0d60c04</span> in __android_log_assert () from /mslib/libXXXXX.so</span><br><span class="line">#<span class="number">3</span> <span class="number">0xf0d58310</span> in android::RefBase::decStrong(<span class="keyword">void</span> <span class="keyword">const</span>*) <span class="keyword">const</span> ()from /mslib/libXXXXX.so</span><br><span class="line">#<span class="number">4</span> <span class="number">0x0b10ec78</span> in XxXXXService::connect(android::sp&lt;IXxXXXClient&gt; <span class="keyword">const</span>&amp;) ()</span><br><span class="line">.......</span><br><span class="line">#<span class="number">10</span> <span class="number">0x0afd8114</span> in XxResourceHandle::~XxResourceHandle() ()</span><br><span class="line">#<span class="number">11</span> <span class="number">0x0afd8f88</span> in object_buffer&lt;XxResourceHandle, <span class="number">256</span>&gt;::~object_buffer() ()</span><br><span class="line">#<span class="number">12</span> <span class="number">0x0afd8fd8</span> in object_count_manager&lt;xx_atomic, object_buffer&lt;XxResourceHandle, <span class="number">256</span>&gt; &gt;::~object_count_manager() ()</span><br><span class="line">#<span class="number">13</span> <span class="number">0xe939b0c0</span> in __run_exit_handlers ()</span><br><span class="line">#14 0xf040815c in exit () from /lib/libc.so.6</span><br><span class="line">#15 0xf07bdf4c in dfb_core_destroy_handler () from /mslib/libdirectfb-1.4.so.0</span><br><span class="line">#<span class="number">16</span> <span class="number">0xf0ef3184</span> in ?? () from /lib/libpthread.so<span class="number">.0</span></span><br><span class="line">Cannot access memory at address <span class="number">0x0</span></span><br><span class="line">#<span class="number">17</span> <span class="number">0xf04a3028</span> in ?? () from /lib/libc.so<span class="number">.6</span></span><br><span class="line">Cannot access memory at address <span class="number">0x0</span></span><br><span class="line">Backtrace stopped: <span class="function">previous frame identical to <span class="keyword">this</span> <span class="title">frame</span> <span class="params">(corrupt <span class="built_in">stack</span>?)</span></span></span><br><span class="line"><span class="function"><span class="params">(gdb)</span> q</span></span><br></pre></td></tr></table></figure></p>
+<p>　　按照大部分新手的习惯，解coredump出来，看到abort首先会去看那个位置的code，查引发abort的原因（以前的我也会）。但这一例中，如果按照这样的思路去查，就会陷入无底洞，查不到原因。后面你也会发现每次压测出来的trace的位置不断变化，由此可能会以为是踩内存、并发之类的问题，绕了弯路。若仔细一看，你会发现异常点是dfb_core_destroy_handler中调用了exit。<br>　　在这一例中看到exit基本也就定位到问题点了，异常的原因是dfb_core_destroy_handler中调用了exit，exit退出时会去析构全局和静态对象，带出了其他问题。根据<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/n4727.pdf" title="ISO 2003 C++ Standard" target="_blank" rel="noopener">ISO 2003 C++ standard</a>的要求，exit函数在退出时会调用相关的对象的析构函数来释放资源，具体定义如下。<br><img src="/2018/11/30/BugFromDFB/exit.png" title="definition of exit"><br>　　我们可以通过下面的demo程序体验标准中的规定，特别指出，例子中a2对象满足“Automatic objects are not destroyed as a result of calling exit()”，因为它是栈上分配的。由此可见，这问题的本质也就是查exit被call的原因。<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">"stdio.h"</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">"stdlib.h"</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> <span class="built_in">std</span>;</span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">demo</span></span></span><br><span class="line"><span class="class">&#123;</span></span><br><span class="line">    <span class="keyword">int</span> num ;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    demo(<span class="keyword">int</span> x): num(x)</span><br><span class="line">    &#123;</span><br><span class="line">    &#125;</span><br><span class="line">    ~demo(<span class="keyword">void</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">cout</span>&lt;&lt;<span class="string">"exit in destrution"</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">"Num[%d] exit in destrution\r\n"</span>, num);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="function">demo <span class="title">a1</span><span class="params">(<span class="number">1</span>)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> **argv)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="function">demo <span class="title">a2</span><span class="params">(<span class="number">2</span>)</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">static</span> demo <span class="title">a3</span><span class="params">(<span class="number">3</span>)</span></span>;</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">exit</span>(<span class="number">0</span>) ;</span><br><span class="line">    <span class="built_in">cout</span>&lt;&lt;<span class="string">"exit in main\r\n"</span>&lt;&lt;<span class="built_in">endl</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>　　通过开log压测一晚复现问题，我们看到DFB在初始化阶段，调用dlopen时failed，提示log为“Too many open files”。这个log就是典型的FD leak问题，这部分可以参考<a href="https://www.jianshu.com/p/befd4b86cc42" title="Android-Stability【Fdleak】: Android Fd泄漏问题分析" target="_blank" rel="noopener">Android-Stability【Fdleak】: Android Fd泄漏问题分析</a>的说明。这个问题也就是当前进程中open了过多的fd导致dlopen时failed了。</p>
+<blockquote>
+<p>01-01 09:58:51.724 2045 2045 I XXXXX: –&gt; /mslib/directfb-1.4-0/wm/libdirectfbwm_default.so: cannot open shared object file: Too many open files</p>
+</blockquote>
+<p>　　请DFB owner review相关code，确认dlopen、dlclose调用成对，不会出现leak的问题，也就需要从对应进程的角度上分析。当进程异常退出时，所有资源被释放掉，也就没法看到什么内容leak了。这也就要求我们每压测一段时间，抓取/proc/$PID/fd下的信息，然后对比初始的，看增长的文件是哪些。<br>　　手动压测几次后，“ls -l /proc/$PID/fd | grep . -c”统计fd数量变化，发现每次切换timming后都会增长4个fd。通过比对timming切换前后/proc/$PID/fd下内容的变化，我们发现是pipe leak。由此我们可以通过lsof来确认是哪些进程线程在用这个pipe，用法类似如下，”lsof | grep $pipp_id”定位。Unfortunately，异常时发现只有当前进程用着这个pipe，这也就说明，大概率是本进程创建pipe，起了其他线程退出后，本进程没关掉。<br><img src="/2018/11/30/BugFromDFB/pipe.png" title="Use lsof and proc debug fd leak"><br>　　review code没发现不合理的pipe使用，于是通过strace查看是否有读写这个pipe的行为，来反推异常点。具体例子如下，我们先确认对应fd号，然后“strace -p $PID -e trace=open,close,rean,write”追读写行为。可惜事与愿违，没看到任何对新增pipe的读写操作，问题一度断线。不过仔细一想，异常时有调用DFBCreate的行为，而这部分通过DFB owner release so到工程中，我们看不到代码，故更应该从这里下手。通过实验确认如果没做这个行为就不会出现leak，也就是说可能是so中有地方创建线程，然后创建线程的地方没有close pipe导致leak，请owner review code中异常点，通过加log分析，确认是DFB中有地方逻辑异常导致问题的发生。<br><img src="/2018/11/30/BugFromDFB/strace.png" title="Use strace and proc debug fd leak"><br>　　至此，初测问题解决，但回头来看。异常发生时，只是因为fd leak导致DFB没法成功初始化，而我们实际只需要模块的抓图功能，不需要绘图功能，而DFB组件异常也不应该影响拉挂整个服务，即DFB异常时不应该通过exit退出。基于此改code，仅保留异常提示，然后返回异常值，上层做容错，增强系统稳定性。<br>　　提供修改给客户压测，压测后，发现问题现象依旧，但这次异常没有coredump了。幸运的是有tombstone文件，发现是挂在pthread_setschedparam上，具体如下。这次我跟owner要到代码了，通过review code可以确认param非NULL，那异常就应该是thread参数了，owner怀疑是pthread_create failed了，导致thread为0继而出现异常。</p>
+<blockquote>
+<p>int pthread_setschedparam(pthread_t thread, int policy,const struct sched_param *param);</p>
+</blockquote>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">334864</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /applications/bin/XXXX(_Z13signalHandleriP9siginfo_tPv+<span class="number">0xa4</span>) </span><br><span class="line"><span class="number">334865</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /lib/libc.so<span class="number">.6</span>(__default_rt_sa_restorer_v2+<span class="number">0</span>) </span><br><span class="line"><span class="number">334866</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /lib/libpthread.so<span class="number">.0</span>(pthread_getschedparam+<span class="number">0x4</span>) </span><br><span class="line"><span class="number">334867</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libdirect<span class="number">-1.4</span>.so<span class="number">.0</span>(direct_thread_create+<span class="number">0x18d</span>) </span><br><span class="line"><span class="number">334868</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/directfb<span class="number">-1.4</span><span class="number">-0</span>/inputdrivers/libdirectfb_mstarir.so(+<span class="number">0x15b4</span>) </span><br><span class="line"><span class="number">334869</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libdirectfb<span class="number">-1.4</span>.so<span class="number">.0</span>(+<span class="number">0x9b22a</span>) </span><br><span class="line"><span class="number">334870</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libdirectfb<span class="number">-1.4</span>.so<span class="number">.0</span>(dfb_core_part_initialize+<span class="number">0xa5</span>) </span><br><span class="line"><span class="number">334871</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libdirectfb<span class="number">-1.4</span>.so<span class="number">.0</span>(+<span class="number">0x90204</span>)</span><br><span class="line"><span class="number">334872</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libfusion<span class="number">-1.4</span>.so<span class="number">.0</span>(fusion_arena_enter+<span class="number">0x173</span>) </span><br><span class="line"><span class="number">334873</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libdirectfb<span class="number">-1.4</span>.so<span class="number">.0</span>(dfb_core_create+<span class="number">0x26b</span>) </span><br><span class="line"><span class="number">334874</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /mslib/libdirectfb<span class="number">-1.4</span>.so<span class="number">.0</span>(DirectFBCreate+<span class="number">0x21f</span>)</span><br><span class="line"><span class="number">334875</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /applications/bin/XXXX(MI_ATOM_XXX_Init+<span class="number">0x27c</span>)</span><br><span class="line"><span class="number">334876</span><span class="number">-01</span><span class="number">-01</span> <span class="number">10</span>:<span class="number">21</span>:<span class="number">54.114</span>  <span class="number">2049</span>  <span class="number">2049</span> I XXXX:  /applications/bin/XXXX(MI_IMPL_XXX_Init+<span class="number">0x2ec</span>)</span><br></pre></td></tr></table></figure>
+<p>　　通过加log压测，确认异常时pthread_create的返回值为EAGAIN （11），通过<a href="http://man.yolinux.com/cgi-bin/man2html?cgi_command=PTHREAD_CREATE(3)" title="pthread_create" target="_blank" rel="noopener">Linux Programmer’s Manual</a> pthread_create一节可以看到对这个返回值的解析，也就是线程创建数超限了，因此执行pthread_create创建新线程时，就会异常退出。</p>
+<blockquote>
+<p>EAGAIN Insufficient resources to create another thread.<br>EAGAIN A system-imposed limit on the number of threads was encountered.There are a number of limits that may trigger this error: the RLIMIT_NPROC soft resource limit (set via    setrlimit(2)),    which limits the number of processes and threads for a real user ID, was reached; the kernel’s system-wide limit on the number of processes and threads, /proc/sys/kernel/threads-max, was reached (see proc(5)); or the maximum number of    PIDs,    /proc/sys/kernel/pid_max, was reached (see proc(5)).</p>
+</blockquote>
+<p>　　手动复现问题，然后通过”busybox ps -T &gt; ps_t_$CNT.txt”，查看系统内全部进程线程信息，记录压测过程中相关变化，经过几次操作，发现每次都有两个dfb线程创建后没退出。长此以往，压测一段时间就会出现线程超限问题。因线程有通过prctl(PR_SET_NAME, “ThreadName1”); 设置线程名，也就很快定位问题点，review code后修正异常逻辑，重新手动测试，问题修正。<br><img src="/2018/11/30/BugFromDFB/threadLeak.png" title="abnormal thread create"></p>
+<h3 id="FD-leak-debug手段"><a href="#FD-leak-debug手段" class="headerlink" title=" FD leak debug手段 "></a><span id="fd-leak-debug-method"> FD leak debug手段 </span></h3><h4 id="一-定位leak的是什么"><a href="#一-定位leak的是什么" class="headerlink" title="一. 定位leak的是什么"></a>一. 定位leak的是什么</h4><p>　　1、确认异常的PID。异常发生时，我们常会看到“Too many open files”这样的log，根据log所在PID的，或者其他手段我们可以确认异常发生的进程。<br>　　2、查看异常进程的FD信息。如果有复现手段，我们可以先执行”ls -la /proc/$PID/fd | grep . -c”，然后复现，统计异常操作前后FD数的变化情况，以此确认问题。确认异常后，就在异常操作前后分别”ls -la /proc/$PID/fd”，比较差异，获取leak的FD，如果有具体的设备名/文件名，我们可以直接全局搜索，查找是哪里open了，没释放。如果是匿名的管道和内存，那就需要进一步定位的。</p>
+<h4 id="二-定位是哪里打开"><a href="#二-定位是哪里打开" class="headerlink" title="二. 定位是哪里打开"></a>二. 定位是哪里打开</h4><p>　　3、通过lsof大致定位异常发生情形。”lsof | grep -Ei $FD”，这个命令可以看到是哪些进程在用fd，尤其是pipe leak的分析，这个有一定的助益。本例中，大概定位是创建线程方没有close pipe。<br>　　4、strace定位操作行为。通过步骤2，我们可以获取到泄漏的fd号，配合“strace -p $PID -e trace=open,close,rean,write”，我们可以明确这个泄漏的pipe做了些什么，助攻问题定位。</p>
+<h4 id="三-确认异常逻辑并修正"><a href="#三-确认异常逻辑并修正" class="headerlink" title="三. 确认异常逻辑并修正"></a>三. 确认异常逻辑并修正</h4><p>　　5、在有如上信息后，review code中相关flow，主要在于确认对应环境和情景下，为何会出现open没有close的行为。包括”anon_inode:[eventpoll]”和”/dev/ashmem”在内的诸多泄漏问题，都是对应场景下的考虑不周导致异常发生。各类leak的处理点难点也就在这里，定位的异常发生点，接下来要考虑的就是flow的问题了。</p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>　　这个问题发生在DFB相关资源不断申请和释放，每用一次就申请一次释放一次，因此对某个行为的压测就变成对DFB稳定的压测，从而使得问题暴露。实际上，DFB的资源申请只需要开机后做一次，此后其他进程使用这个服务的资源时，直接调用即可，这样整个系统的稳定性就会提升。另外，在这次debug过程中，我们可以看到没有做好各种防御编程，导致异常发生并恶化。<br><img src="/2018/11/30/BugFromDFB/abnormalCheck.png" title="abnormal thread usage"><br>　　任何时候，我们都不应该相信其他函数返回的结果，也不能假设库函数的返回结果是正常，始终坚持在防御代价比较低的情况下对各种场景做异常检测和防御，这是对软件稳定性的负责任。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+      <div>
+        <ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者：</strong>
+    Donald.Zhuang
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://donald-zhuang.github.io/2018/11/30/BugFromDFB/" title="记一次DFB异常问题处理和思考">https://donald-zhuang.github.io/2018/11/30/BugFromDFB/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>
+    本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" rel="external nofollow" target="_blank">CC BY-NC-SA 3.0</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+
+      </div>
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/gdb/" rel="tag"># gdb</a>
+          
+            <a href="/tags/mprotect/" rel="tag"># mprotect</a>
+          
+            <a href="/tags/efence/" rel="tag"># efence</a>
+          
+            <a href="/tags/内存越界访问/" rel="tag"># 内存越界访问</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/11/24/efence/" rel="next" title="内存异常处理手段总汇 一 -- electric-fence及其源码解析">
+                <i class="fa fa-chevron-left"></i> 内存异常处理手段总汇 一 -- electric-fence及其源码解析
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+      <div id="sidebar-dimmer"></div>
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/avatar.gif"
+                alt="Donald.Zhuang" />
+            
+              <p class="site-author-name" itemprop="name">Donald.Zhuang</p>
+              <p class="site-description motion-element" itemprop="description"></p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">10</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">5</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">14</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/donald-zhuang" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:yukunzhuang@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#问题处理过程"><span class="nav-number">1.</span> <span class="nav-text">问题处理过程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#FD-leak-debug手段"><span class="nav-number">2.</span> <span class="nav-text"> FD leak debug手段 </span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#一-定位leak的是什么"><span class="nav-number">2.1.</span> <span class="nav-text">一. 定位leak的是什么</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#二-定位是哪里打开"><span class="nav-number">2.2.</span> <span class="nav-text">二. 定位是哪里打开</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#三-确认异常逻辑并修正"><span class="nav-number">2.3.</span> <span class="nav-text">三. 确认异常逻辑并修正</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#总结"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Donald.Zhuang</span>
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+  <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+  <script src="//unpkg.com/valine/dist/Valine.min.js"></script>
+  
+  <script type="text/javascript">
+    var GUEST = ['nick','mail','link'];
+    var guest = 'nick,mail';
+    guest = guest.split(',').filter(item=>{
+      return GUEST.indexOf(item)>-1;
+    });
+    new Valine({
+        el: '#comments' ,
+        verify: false,
+        notify: false,
+        appId: 'sxusj7QM1yscw80QmXrzS7RF-gzGzoHsz',
+        appKey: 'LKGpEcrVf998QJrYCHajJsT8',
+        placeholder: 'Just go go',
+        avatar:'mm',
+        meta:guest,
+        pageSize:'10' || 10,
+        visitor: true,
+    });
+  </script>
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+  <script type="text/javascript" src="/js/src/js.cookie.js?v=5.1.4"></script>
+  <script type="text/javascript" src="/js/src/scroll-cookie.js?v=5.1.4"></script>
+
+
+  
+
+</body>
+</html>
